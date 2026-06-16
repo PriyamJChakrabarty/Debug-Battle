@@ -1,0 +1,39 @@
+{
+  "Code": "../codes/UserManager.cpp",
+  "Vulnerabilities": {
+    "Security": [
+      "Passwords are stored in plaintext.",
+      "Sensitive user data is written to an unencrypted file.",
+      "No input validation or sanitization.",
+      "No authentication protections such as password hashing or rate limiting."
+    ],
+    "Performance": [
+      "User objects are copied unnecessarily in the login loop.",
+      "Nested loops in processUsers() create excessive processing overhead.",
+      "Linear search for authentication becomes slow as users grow."
+    ],
+    "Scalability": [
+      "Authentication uses O(n) search across all users.",
+      "processUsers() performs O(n²) operations.",
+      "Flat file storage does not scale for large datasets.",
+      "Entire user dataset is kept in memory."
+    ],
+    "Ethics": {
+      "Bias": [
+        "Loan approval decision is based on ethnicity."
+      ],
+      "Privacy": [
+        "Personally identifiable information is stored without protection.",
+        "User credentials are exposed in persistent storage.",
+        "No consent or data-retention controls."
+      ]
+    },
+    "Maintainability": [
+      "Hardcoded business rules.",
+      "No separation of concerns between UI, storage, and business logic.",
+      "Global users vector increases coupling.",
+      "Lack of error handling for file operations.",
+      "No documentation or configuration management."
+    ]
+  }
+}
