@@ -107,6 +107,9 @@ export default function HomePage() {
           <Link href="/leaderboard" style={{ fontSize: "13px", color: "#8ba0a6", textDecoration: "none" }}>
             Leaderboard
           </Link>
+          <Link href="/social" style={{ fontSize: "13px", color: "#8ba0a6", textDecoration: "none" }}>
+            Social
+          </Link>
           <SiteAuthControls />
         </div>
       </nav>
