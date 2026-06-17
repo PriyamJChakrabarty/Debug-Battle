@@ -1,3 +1,5 @@
+import { requireAuthenticatedRequest } from "@/lib/clerk-guard";
+
 export const dynamic = "force-dynamic";
 
 const SYSTEM_PROMPT = `You are a strict code vulnerability reviewer for a security training exercise.
@@ -74,6 +76,12 @@ function logVuln(vuln, index, userCode, { alreadyFixed, groqFixed, groqAnalysis 
 }
 
 export async function POST(request) {
+  const unauthorized = await requireAuthenticatedRequest();
+
+  if (unauthorized) {
+    return unauthorized;
+  }
+
   const body = await request.json();
   const { userCode, vulnerabilities, alreadyFixed, category } = body;
 

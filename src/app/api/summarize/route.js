@@ -1,6 +1,14 @@
+import { requireAuthenticatedRequest } from "@/lib/clerk-guard";
+
 export const dynamic = "force-dynamic";
 
 export async function POST(request) {
+  const unauthorized = await requireAuthenticatedRequest();
+
+  if (unauthorized) {
+    return unauthorized;
+  }
+
   const { code } = await request.json();
 
   if (!code?.trim()) {
