@@ -167,7 +167,7 @@ For each vulnerability:
     body: JSON.stringify({
       model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
       temperature: 0.1,
-      max_completion_tokens: 200,
+      max_completion_tokens: 512,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
