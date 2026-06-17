@@ -29,7 +29,10 @@ Do NOT mark fixed if:
 
 Be precise and strict — look at the logic, not just the surface text.
 
-Return exactly one JSON object: { "fixed": [array of 0-based index numbers that are now fixed] }`;
+Return exactly one JSON object with two fields:
+- "fixed": array of 0-based index numbers that are now fixed
+- "analysis": array of objects — one per evaluated vulnerability — each with:
+  { "index": <number>, "fixed": <boolean>, "reason": "<one concise sentence explaining why it is or is not fixed>" }`;
 
 function extractLines(code, start, end) {
   const lines = code.split("\n");
@@ -45,15 +48,15 @@ function indent(text, spaces = 6) {
     .join("\n");
 }
 
-function logVuln(vuln, index, userCode, { alreadyFixed, groqFixed }) {
+function logVuln(vuln, index, userCode, { alreadyFixed, groqFixed, groqAnalysis = {} }) {
   const [start, end] = Array.isArray(vuln["Line Number"])
     ? vuln["Line Number"]
     : [0, 0];
   const userLines = extractLines(userCode, start, end);
 
   const wasAlreadyFixed = alreadyFixed.includes(index);
-  const nowFixed =
-    groqFixed !== null ? groqFixed.includes(index) : null;
+  const nowFixed = groqFixed !== null ? groqFixed.includes(index) : null;
+  const reason = groqAnalysis[index] ?? null;
 
   console.log(`\n  ┌─ Vulnerability [${index}]`);
   console.log(`  │  Line Number      : ${start}–${end}`);
@@ -62,9 +65,10 @@ function logVuln(vuln, index, userCode, { alreadyFixed, groqFixed }) {
   console.log(`  │  Correct Code Ref :\n${indent(vuln["Correct Code"])}`);
   console.log(`  │  Already Fixed    : ${wasAlreadyFixed ? "Yes ✓ (skipped)" : "No"}`);
   if (!wasAlreadyFixed && nowFixed !== null) {
-    console.log(
-      `  │  Groq's Analysis  : ${nowFixed ? "FIXED ✓" : "NOT FIXED ✗"}`
-    );
+    console.log(`  │  Groq's Analysis  : ${nowFixed ? "FIXED ✓" : "NOT FIXED ✗"}`);
+    if (reason) {
+      console.log(`  │  Reason           : ${reason}`);
+    }
   }
   console.log(`  └${"─".repeat(50)}`);
 }
@@ -167,7 +171,7 @@ For each vulnerability:
     body: JSON.stringify({
       model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
       temperature: 0.1,
-      max_completion_tokens: 512,
+      max_completion_tokens: 1024,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
@@ -193,14 +197,22 @@ For each vulnerability:
   }
 
   let valid = [];
+  let groqAnalysis = {}; // map: index → reason string
   try {
     const parsed = JSON.parse(content);
     const fixed = Array.isArray(parsed.fixed) ? parsed.fixed : [];
     valid = fixed.filter(
       (i) => typeof i === "number" && i >= 0 && i < (vulnerabilities ?? []).length
     );
+    if (Array.isArray(parsed.analysis)) {
+      parsed.analysis.forEach((item) => {
+        if (typeof item.index === "number" && typeof item.reason === "string") {
+          groqAnalysis[item.index] = item.reason;
+        }
+      });
+    }
   } catch {
-    // valid stays []
+    // valid and groqAnalysis stay at defaults
   }
 
   // ── Groq analysis results ────────────────────────────────
@@ -212,6 +224,7 @@ For each vulnerability:
     logVuln(vuln, vuln.index, userCode, {
       alreadyFixed: alreadyFixed ?? [],
       groqFixed: valid,
+      groqAnalysis,
     });
   });
 
