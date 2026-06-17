@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ne, notInArray, or } from "drizzle-orm";
+import { and, asc, desc, eq, ne, notInArray, or, sql } from "drizzle-orm";
 import { db } from "./db";
 import { conversations, follows, messages, users } from "./schema";
 
@@ -61,6 +61,30 @@ export async function getSuggestedUsers(myClerkId, limit = 8) {
     .where(notInArray(users.clerkId, excludeIds))
     .orderBy(desc(users.bestScore))
     .limit(limit);
+}
+
+// ── Following list ────────────────────────────────────────────
+
+export async function getFollowing(myClerkId) {
+  return db
+    .select({
+      clerkId:   users.clerkId,
+      firstName: users.firstName,
+      lastName:  users.lastName,
+      username:  users.username,
+      imageUrl:  users.imageUrl,
+      bestScore: users.bestScore,
+      noteText:  users.noteText,
+    })
+    .from(follows)
+    .innerJoin(users, eq(users.clerkId, follows.followingClerkId))
+    .where(eq(follows.followerClerkId, myClerkId))
+    .orderBy(asc(follows.createdAt));
+}
+
+export async function updateNote(clerkId, noteText) {
+  const trimmed = noteText?.trim().slice(0, 60) ?? null;
+  await db.update(users).set({ noteText: trimmed }).where(eq(users.clerkId, clerkId));
 }
 
 // ── Conversations ─────────────────────────────────────────────

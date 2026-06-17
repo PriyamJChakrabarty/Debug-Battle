@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import SiteAuthControls from "@/components/site-auth-controls";
+import SiteNav from "@/components/site-nav";
 
 const MODES = [
   {
@@ -58,61 +58,7 @@ const BG = {
 export default function HomePage() {
   return (
     <div style={BG.root}>
-      <nav
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "16px 40px",
-          borderBottom: "1px solid rgba(201,214,218,0.08)",
-          position: "sticky",
-          top: 0,
-          zIndex: 50,
-          background: "rgba(13,26,31,0.85)",
-          backdropFilter: "blur(14px)",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "2px" }}>
-          <span style={{ fontSize: "17px", fontWeight: 900, color: "#3ddc84", letterSpacing: "-0.03em" }}>Debug</span>
-          <span style={{ fontSize: "17px", fontWeight: 900, color: "#e8f0f3", letterSpacing: "-0.03em" }}>Battle</span>
-          <span
-            style={{
-              fontSize: "10px",
-              fontWeight: 700,
-              background: "#3ddc84",
-              color: "#0d1a1f",
-              padding: "1px 7px",
-              borderRadius: "999px",
-              marginLeft: "8px",
-            }}
-          >
-            BETA
-          </span>
-        </div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "24px",
-            flexWrap: "wrap",
-            justifyContent: "flex-end",
-          }}
-        >
-          <a href="#modes" style={{ fontSize: "13px", color: "#8ba0a6", textDecoration: "none" }}>
-            Modes
-          </a>
-          <a href="#categories" style={{ fontSize: "13px", color: "#8ba0a6", textDecoration: "none" }}>
-            Categories
-          </a>
-          <Link href="/leaderboard" style={{ fontSize: "13px", color: "#8ba0a6", textDecoration: "none" }}>
-            Leaderboard
-          </Link>
-          <Link href="/social" style={{ fontSize: "13px", color: "#8ba0a6", textDecoration: "none" }}>
-            Social
-          </Link>
-          <SiteAuthControls />
-        </div>
-      </nav>
+      <SiteNav active="/" />
 
       <section style={{ padding: "110px 40px 80px", maxWidth: "1100px", margin: "0 auto", textAlign: "center" }}>
         <div

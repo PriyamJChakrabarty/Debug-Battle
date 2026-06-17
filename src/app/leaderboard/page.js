@@ -1,4 +1,5 @@
 import Link from "next/link";
+import SiteNav from "@/components/site-nav";
 import { getLeaderboard } from "@/lib/db-users";
 
 export const metadata = { title: "Leaderboard — DebugBattle" };
@@ -40,30 +41,7 @@ export default async function LeaderboardPage() {
         backgroundSize: "100% 100%, 44px 44px, 44px 44px",
       }}
     >
-      {/* Nav */}
-      <nav
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "16px 40px",
-          borderBottom: "1px solid rgba(201,214,218,0.08)",
-          position: "sticky",
-          top: 0,
-          zIndex: 50,
-          background: "rgba(13,26,31,0.85)",
-          backdropFilter: "blur(14px)",
-        }}
-      >
-        <Link href="/" style={{ display: "flex", alignItems: "center", gap: "2px", textDecoration: "none" }}>
-          <span style={{ fontSize: "17px", fontWeight: 900, color: "#3ddc84", letterSpacing: "-0.03em" }}>Debug</span>
-          <span style={{ fontSize: "17px", fontWeight: 900, color: "#e8f0f3", letterSpacing: "-0.03em" }}>Battle</span>
-        </Link>
-        <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
-          <Link href="/" style={{ fontSize: "13px", color: "#8ba0a6", textDecoration: "none" }}>Home</Link>
-          <Link href="/duel" style={{ fontSize: "13px", color: "#8ba0a6", textDecoration: "none" }}>Play</Link>
-        </div>
-      </nav>
+      <SiteNav active="/leaderboard" />
 
       <main style={{ maxWidth: "760px", margin: "0 auto", padding: "60px 24px 80px" }}>
         {/* Header */}

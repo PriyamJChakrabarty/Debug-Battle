@@ -1,0 +1,91 @@
+import Link from "next/link";
+import SiteAuthControls from "./site-auth-controls";
+
+const LINKS = [
+  { href: "/",             label: "Home" },
+  { href: "/leaderboard",  label: "Leaderboard" },
+  { href: "/social",       label: "Social" },
+];
+
+export default function SiteNav({ active }) {
+  return (
+    <nav
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "0 40px",
+        height: "57px",
+        borderBottom: "1px solid rgba(201,214,218,0.08)",
+        position: "sticky",
+        top: 0,
+        zIndex: 50,
+        background: "rgba(13,26,31,0.9)",
+        backdropFilter: "blur(16px)",
+        flexShrink: 0,
+      }}
+    >
+      {/* Logo */}
+      <Link href="/" style={{ display: "flex", alignItems: "center", gap: "2px", textDecoration: "none" }}>
+        <span style={{ fontSize: "17px", fontWeight: 900, color: "#3ddc84", letterSpacing: "-0.03em" }}>Debug</span>
+        <span style={{ fontSize: "17px", fontWeight: 900, color: "#e8f0f3", letterSpacing: "-0.03em" }}>Battle</span>
+        <span
+          style={{
+            fontSize: "10px",
+            fontWeight: 700,
+            background: "#3ddc84",
+            color: "#0d1a1f",
+            padding: "1px 7px",
+            borderRadius: "999px",
+            marginLeft: "8px",
+          }}
+        >
+          BETA
+        </span>
+      </Link>
+
+      {/* Nav links */}
+      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+        {LINKS.map(({ href, label }) => {
+          const isActive = active === href;
+          return (
+            <Link
+              key={href}
+              href={href}
+              style={{
+                fontSize: "13px",
+                fontWeight: isActive ? 600 : 400,
+                color: isActive ? "#3ddc84" : "#8ba0a6",
+                textDecoration: "none",
+                padding: "6px 12px",
+                borderRadius: "6px",
+                background: isActive ? "rgba(61,220,132,0.08)" : "transparent",
+              }}
+            >
+              {label}
+            </Link>
+          );
+        })}
+        <Link
+          href="/duel"
+          style={{
+            fontSize: "13px",
+            fontWeight: 700,
+            color: active === "/duel" ? "#0d1a1f" : "#0d1a1f",
+            textDecoration: "none",
+            background: "#3ddc84",
+            padding: "7px 18px",
+            borderRadius: "999px",
+            marginLeft: "8px",
+            boxShadow: "0 0 20px rgba(61,220,132,0.2)",
+          }}
+        >
+          Play →
+        </Link>
+      </div>
+
+      {/* Auth */}
+      <SiteAuthControls />
+    </nav>
+  );
+}

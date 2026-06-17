@@ -43,6 +43,11 @@ export async function getLeaderboard(limit = 100) {
     .limit(limit);
 }
 
+export async function getUserByClerkId(clerkId) {
+  const rows = await db.select().from(users).where(eq(users.clerkId, clerkId)).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function deleteUserByClerkId(clerkId) {
   await db.delete(users).where(eq(users.clerkId, clerkId));
 }
