@@ -104,6 +104,9 @@ export default function HomePage() {
           <a href="#categories" style={{ fontSize: "13px", color: "#8ba0a6", textDecoration: "none" }}>
             Categories
           </a>
+          <Link href="/leaderboard" style={{ fontSize: "13px", color: "#8ba0a6", textDecoration: "none" }}>
+            Leaderboard
+          </Link>
           <SiteAuthControls />
         </div>
       </nav>

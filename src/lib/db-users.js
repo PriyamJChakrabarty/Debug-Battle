@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, asc, desc, eq, lt } from "drizzle-orm";
 import { db } from "./db";
 import { users } from "./schema";
 
@@ -19,6 +19,28 @@ export async function upsertUser({ clerkId, email, firstName, lastName, imageUrl
     })
     .returning();
   return rows[0];
+}
+
+export async function updateBestScore(clerkId, newScore) {
+  await db
+    .update(users)
+    .set({ bestScore: newScore, updatedAt: new Date() })
+    .where(and(eq(users.clerkId, clerkId), lt(users.bestScore, newScore)));
+}
+
+export async function getLeaderboard(limit = 100) {
+  return db
+    .select({
+      id:        users.id,
+      firstName: users.firstName,
+      lastName:  users.lastName,
+      username:  users.username,
+      imageUrl:  users.imageUrl,
+      bestScore: users.bestScore,
+    })
+    .from(users)
+    .orderBy(desc(users.bestScore), asc(users.createdAt))
+    .limit(limit);
 }
 
 export async function deleteUserByClerkId(clerkId) {
