@@ -79,22 +79,34 @@ export default function MatchmakingClient({ myClerkId, myName }) {
   const pollRef = useRef(null);
   const cdRef   = useRef(null);
 
-  // ── On mount: check for existing match first ───────────────
+  // ── On mount ───────────────────────────────────────────────
+  // ?resume=1  → reconnect to an existing match (from "Return to Duel" button)
+  // no param   → always start fresh (cancel any stale queue row first)
   useEffect(() => {
-    (async () => {
-      try {
-        const r = await fetch("/api/duel/match/current");
-        if (r.ok) {
-          const { match } = await r.json();
-          if (match) {
-            setMatchData(match);
-            setPhase("matched");
-            return;
+    const resume = new URLSearchParams(window.location.search).get("resume") === "1";
+
+    if (resume) {
+      window.history.replaceState({}, "", "/live-battle");
+      (async () => {
+        try {
+          const r = await fetch("/api/duel/match/current");
+          if (r.ok) {
+            const { match } = await r.json();
+            if (match) {
+              setMatchData(match);
+              setPhase("matched");
+              return;
+            }
           }
-        }
-      } catch {}
+        } catch {}
+        // No active match found — fall through to fresh search
+        fetch("/api/duel/queue/cancel", { method: "DELETE" }).catch(() => {});
+        setPhase("searching");
+      })();
+    } else {
+      fetch("/api/duel/queue/cancel", { method: "DELETE" }).catch(() => {});
       setPhase("searching");
-    })();
+    }
   }, []);
 
   // ── Poll queue every 2s while searching ───────────────────

@@ -3,6 +3,7 @@ import Link from "next/link";
 import SiteNav from "@/components/site-nav";
 import HeartbeatClient from "@/components/heartbeat";
 import OnlinePlayersWidget from "@/components/online-players";
+import ReturnToDuelButton from "@/components/return-to-duel";
 
 const MODES = [
   {
@@ -129,6 +130,7 @@ export default function HomePage() {
           >
             Start a Duel →
           </Link>
+          <ReturnToDuelButton />
           <Link
             href="/duel"
             style={{
