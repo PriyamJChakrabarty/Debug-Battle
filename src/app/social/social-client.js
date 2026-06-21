@@ -90,8 +90,7 @@ function Avi({ name, size = 36, color = C.green, online = false }) {
         <div style={{
           position: "absolute", bottom: 0, right: 0,
           width: dotSize, height: dotSize, borderRadius: "50%",
-          background: C.green,
-          border: `2px solid ${C.bg}`,
+          background: C.green, border: `2px solid ${C.bg}`,
           boxShadow: "0 0 6px rgba(61,220,132,0.5)",
         }} />
       )}
@@ -147,14 +146,14 @@ function InboxRow({ conv, active, myClerkId, onClick, online }) {
           </span>
         </div>
         <div style={{ fontSize: "12px", color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: "2px" }}>
-          {last ? `${mine ? "You: " : ""}${last.body}` : "No messages yet"}
+          {last ? `${mine ? "You: " : ""}${last.body}` : ""}
         </div>
       </div>
     </button>
   );
 }
 
-function SuggestCard({ user, isFollowed, onFollow, onMessage, openingConv, online }) {
+function SuggestCard({ user, isFollowed, onFollow, onMessage, online }) {
   const name = dname(user);
   return (
     <div style={{
@@ -186,10 +185,9 @@ function SuggestCard({ user, isFollowed, onFollow, onMessage, openingConv, onlin
         </button>
         <button
           onClick={onMessage}
-          disabled={openingConv}
           style={{
             flex: 1, fontSize: "11px", fontWeight: 700, padding: "5px 0",
-            borderRadius: "6px", cursor: openingConv ? "wait" : "pointer",
+            borderRadius: "6px", cursor: "pointer",
             background: "transparent", color: C.cyan,
             border: `1px solid rgba(34,211,238,0.3)`,
           }}
@@ -201,7 +199,7 @@ function SuggestCard({ user, isFollowed, onFollow, onMessage, openingConv, onlin
   );
 }
 
-function FollowCard({ user, onMessage, openingConv, online }) {
+function FollowCard({ user, onMessage, onUnfollow, online }) {
   const name = dname(user);
   const hasNote = !!user.noteText;
   return (
@@ -225,17 +223,30 @@ function FollowCard({ user, onMessage, openingConv, online }) {
           </div>
         )}
       </div>
-      <button
-        onClick={onMessage}
-        disabled={openingConv}
-        style={{
-          flexShrink: 0, fontSize: "11px", fontWeight: 700,
-          padding: "5px 12px", borderRadius: "6px", cursor: openingConv ? "wait" : "pointer",
-          background: "transparent", color: C.cyan, border: `1px solid rgba(34,211,238,0.3)`,
-        }}
-      >
-        DM
-      </button>
+      <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
+        <button
+          onClick={onUnfollow}
+          style={{
+            fontSize: "11px", fontWeight: 600, padding: "5px 10px",
+            borderRadius: "6px", cursor: "pointer",
+            background: "transparent", color: C.muted,
+            border: `1px solid ${C.border}`,
+          }}
+        >
+          Unfollow
+        </button>
+        <button
+          onClick={onMessage}
+          style={{
+            fontSize: "11px", fontWeight: 700, padding: "5px 12px",
+            borderRadius: "6px", cursor: "pointer",
+            background: "transparent", color: C.cyan,
+            border: `1px solid rgba(34,211,238,0.3)`,
+          }}
+        >
+          DM
+        </button>
+      </div>
     </div>
   );
 }
@@ -244,28 +255,45 @@ function FollowCard({ user, onMessage, openingConv, online }) {
 export default function SocialClient({ myClerkId, myNote }) {
   const [view, setView] = useState("messages");
 
-  const [inbox, setInbox] = useState([]);
+  const [inbox, setInbox]           = useState([]);
   const [inboxLoaded, setInboxLoaded] = useState(false);
-  const [activeConvId, setConvId] = useState(null);
-  const [messages, setMsgs] = useState([]);
-  const [input, setInput] = useState("");
-  const [sending, setSending] = useState(false);
+  const [activeConvId, setConvId]   = useState(null);
+  const [messages, setMsgs]         = useState([]);
+  const [input, setInput]           = useState("");
+  const [sending, setSending]       = useState(false);
 
-  const [suggested, setSuggested] = useState([]);
-  const [following, setFollowing] = useState([]);
-  const [followed, setFollowed] = useState(new Set());
-  const [openingConv, setOpening] = useState(false);
+  // pendingTarget: { clerkId, displayName } — set when DM is clicked but no conv yet
+  const [pendingTarget, setPendingTarget] = useState(null);
+
+  const [suggested, setSuggested]   = useState([]);
+  const [following, setFollowing]   = useState([]);
+  const [followed,  setFollowed]    = useState(new Set());
 
   const [myNoteText, setMyNoteText] = useState(myNote || "");
-  const [editNote, setEditNote] = useState(false);
-  const [noteInput, setNoteInput] = useState(myNote || "");
+  const [editNote,   setEditNote]   = useState(false);
+  const [noteInput,  setNoteInput]  = useState(myNote || "");
 
-  const [onlineIds, setOnlineIds] = useState(new Set());
+  const [onlineIds, setOnlineIds]   = useState(new Set());
 
-  const endRef = useRef(null);
-  const pollRef = useRef(null);
+  const endRef    = useRef(null);
+  const pollRef   = useRef(null);
   const onlineRef = useRef(null);
   const activeConv = inbox.find((c) => c.id === activeConvId) ?? null;
+
+  // Keep followed Set in sync with following list
+  useEffect(() => {
+    setFollowed(new Set(following.map((u) => u.clerkId)));
+  }, [following]);
+
+  // If inbox loads and contains the pending target, switch to that conversation
+  useEffect(() => {
+    if (!pendingTarget || inbox.length === 0) return;
+    const existing = inbox.find((c) => c.otherClerkId === pendingTarget.clerkId);
+    if (existing) {
+      setConvId(existing.id);
+      setPendingTarget(null);
+    }
+  }, [inbox, pendingTarget]);
 
   const fetchSuggested = useCallback(async () => {
     if (!myClerkId) return;
@@ -320,47 +348,85 @@ export default function SocialClient({ myClerkId, myNote }) {
     return () => clearInterval(onlineRef.current);
   }, [myClerkId]);
 
+  // ── Follow / Unfollow ──────────────────────────────────────
   async function handleFollow(clerkId) {
     const had = followed.has(clerkId);
     setFollowed((prev) => { const n = new Set(prev); had ? n.delete(clerkId) : n.add(clerkId); return n; });
     try {
       await api("/api/follow", { method: had ? "DELETE" : "POST", body: JSON.stringify({ targetClerkId: clerkId }) });
       if (!had) {
+        // Followed: remove from suggested, add to following list
         setSuggested((prev) => prev.filter((u) => u.clerkId !== clerkId));
         await fetchFollowing();
+      } else {
+        // Unfollowed from suggest card: refresh suggested
+        await fetchSuggested();
       }
     } catch {
       setFollowed((prev) => { const n = new Set(prev); had ? n.add(clerkId) : n.delete(clerkId); return n; });
     }
   }
 
-  async function openDM(targetClerkId) {
-    setOpening(true);
+  async function handleUnfollow(clerkId) {
+    setFollowing((prev) => prev.filter((u) => u.clerkId !== clerkId));
+    setFollowed((prev) => { const n = new Set(prev); n.delete(clerkId); return n; });
     try {
-      const { conversationId } = await api("/api/chat/conversation", {
-        method: "POST",
-        body: JSON.stringify({ targetClerkId }),
-      });
-      await fetchInbox();
-      setConvId(conversationId);
-      setView("messages");
-    } catch {} finally { setOpening(false); }
+      await api("/api/follow", { method: "DELETE", body: JSON.stringify({ targetClerkId: clerkId }) });
+      await fetchSuggested(); // they may reappear as suggestion
+    } catch {
+      await fetchFollowing(); // revert on error
+    }
   }
 
+  // ── Open DM ────────────────────────────────────────────────
+  // Does NOT create a conversation upfront.
+  // If an existing conversation with that user is already in the inbox, open it.
+  // Otherwise, set pendingTarget so the first sent message creates it.
+  function handleDMClick(user) {
+    const existing = inbox.find((c) => c.otherClerkId === user.clerkId);
+    if (existing) {
+      setConvId(existing.id);
+      setPendingTarget(null);
+    } else {
+      setConvId(null);
+      setPendingTarget({ clerkId: user.clerkId, displayName: dname(user) });
+    }
+    setView("messages");
+  }
+
+  // ── Send message ───────────────────────────────────────────
   async function handleSend() {
-    if (!input.trim() || sending || !activeConvId) return;
+    if (!input.trim() || sending) return;
+    if (!activeConvId && !pendingTarget) return;
     setSending(true);
     const body = input.trim();
     setInput("");
+
     try {
-      await api(`/api/chat/conversation/${activeConvId}/message`, {
-        method: "POST",
-        body: JSON.stringify({ body }),
-      });
-      await Promise.all([fetchMsgs(activeConvId), fetchInbox()]);
+      if (pendingTarget) {
+        // First message: create conversation then send
+        const { conversationId } = await api("/api/chat/conversation", {
+          method: "POST",
+          body: JSON.stringify({ targetClerkId: pendingTarget.clerkId }),
+        });
+        await api(`/api/chat/conversation/${conversationId}/message`, {
+          method: "POST",
+          body: JSON.stringify({ body }),
+        });
+        await fetchInbox();
+        setConvId(conversationId);
+        setPendingTarget(null);
+      } else {
+        await api(`/api/chat/conversation/${activeConvId}/message`, {
+          method: "POST",
+          body: JSON.stringify({ body }),
+        });
+        await Promise.all([fetchMsgs(activeConvId), fetchInbox()]);
+      }
     } catch { setInput(body); } finally { setSending(false); }
   }
 
+  // ── Note ───────────────────────────────────────────────────
   async function saveNote() {
     const text = noteInput.trim().slice(0, 60);
     setMyNoteText(text);
@@ -380,6 +446,10 @@ export default function SocialClient({ myClerkId, myNote }) {
       </div>
     );
   }
+
+  // Derived: who to show in the chat header
+  const chatName = pendingTarget?.displayName ?? activeConv?.displayName ?? null;
+  const chatOtherClerkId = pendingTarget?.clerkId ?? activeConv?.otherClerkId ?? null;
 
   return (
     <div style={{ display: "flex", height: "100%", width: "100%", overflow: "hidden" }}>
@@ -417,6 +487,7 @@ export default function SocialClient({ myClerkId, myNote }) {
       {/* ── Messages view ───────────────────────────────────── */}
       {view === "messages" && (
         <>
+          {/* Inbox list */}
           <div style={{
             width: "265px", flexShrink: 0,
             borderRight: `1px solid ${C.border}`,
@@ -430,7 +501,7 @@ export default function SocialClient({ myClerkId, myNote }) {
               {!inboxLoaded && (
                 <p style={{ fontSize: "12px", color: C.muted, textAlign: "center", padding: "24px 16px" }}>Loading…</p>
               )}
-              {inboxLoaded && inbox.length === 0 && (
+              {inboxLoaded && inbox.length === 0 && !pendingTarget && (
                 <div style={{ padding: "32px 16px", textAlign: "center" }}>
                   <p style={{ fontSize: "13px", color: C.muted, margin: "0 0 10px" }}>No messages yet.</p>
                   <button onClick={() => setView("people")} style={{ background: "none", border: "none", color: C.cyan, cursor: "pointer", fontSize: "12px", textDecoration: "underline" }}>
@@ -438,23 +509,63 @@ export default function SocialClient({ myClerkId, myNote }) {
                   </button>
                 </div>
               )}
+
+              {/* Pending target row (shown while first message hasn't been sent yet) */}
+              {pendingTarget && (
+                <div style={{
+                  display: "flex", alignItems: "center", gap: "11px",
+                  padding: "10px 16px",
+                  borderLeft: `2px solid ${C.cyan}`,
+                  background: "rgba(34,211,238,0.04)",
+                }}>
+                  <Avi name={pendingTarget.displayName} size={38} color={C.cyan} online={onlineIds.has(pendingTarget.clerkId)} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: "13px", fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {pendingTarget.displayName}
+                    </div>
+                    <div style={{ fontSize: "11px", color: C.cyan, marginTop: "2px" }}>New conversation</div>
+                  </div>
+                </div>
+              )}
+
               {inbox.map((conv) => (
-                <InboxRow key={conv.id} conv={conv} active={conv.id === activeConvId} myClerkId={myClerkId} onClick={() => setConvId(conv.id)} online={onlineIds.has(conv.otherClerkId)} />
+                <InboxRow
+                  key={conv.id}
+                  conv={conv}
+                  active={conv.id === activeConvId && !pendingTarget}
+                  myClerkId={myClerkId}
+                  onClick={() => { setConvId(conv.id); setPendingTarget(null); }}
+                  online={onlineIds.has(conv.otherClerkId)}
+                />
               ))}
             </div>
           </div>
 
+          {/* Chat area */}
           <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100%", background: C.bg, minWidth: 0 }}>
-            {activeConvId && activeConv ? (
+            {chatName ? (
               <>
+                {/* Header */}
                 <div style={{ padding: "12px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
-                  <Avi name={activeConv.displayName} size={32} color={C.cyan} />
-                  <span style={{ fontSize: "14px", fontWeight: 600, color: C.text }}>{activeConv.displayName}</span>
+                  <Avi name={chatName} size={32} color={C.cyan} online={onlineIds.has(chatOtherClerkId)} />
+                  <div>
+                    <span style={{ fontSize: "14px", fontWeight: 600, color: C.text }}>{chatName}</span>
+                    {pendingTarget && (
+                      <div style={{ fontSize: "11px", color: C.cyan, marginTop: "1px" }}>Send a message to start the conversation</div>
+                    )}
+                  </div>
                 </div>
+
+                {/* Messages */}
                 <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                  {messages.length === 0 && (
+                  {!pendingTarget && messages.length === 0 && (
                     <p style={{ fontSize: "13px", color: C.muted, textAlign: "center", marginTop: "48px" }}>
-                      Say hello to {activeConv.displayName}!
+                      Say hello to {chatName}!
+                    </p>
+                  )}
+                  {pendingTarget && (
+                    <p style={{ fontSize: "13px", color: C.muted, textAlign: "center", marginTop: "48px" }}>
+                      No messages yet. Send one below!
                     </p>
                   )}
                   {messages.map((msg) => (
@@ -462,12 +573,14 @@ export default function SocialClient({ myClerkId, myNote }) {
                   ))}
                   <div ref={endRef} />
                 </div>
+
+                {/* Input */}
                 <div style={{ padding: "10px 16px", borderTop: `1px solid ${C.border}`, display: "flex", gap: "8px", flexShrink: 0, alignItems: "center" }}>
                   <input
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
-                    placeholder={`Message ${activeConv.displayName}…`}
+                    placeholder={`Message ${chatName}…`}
                     maxLength={500}
                     style={{
                       flex: 1, background: C.panel, border: `1px solid ${C.border}`,
@@ -494,6 +607,9 @@ export default function SocialClient({ myClerkId, myNote }) {
               <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: "12px" }}>
                 <div style={{ color: C.muted }}><IconChat size={36} /></div>
                 <p style={{ fontSize: "14px", color: C.sub, margin: 0 }}>Select a conversation</p>
+                <button onClick={() => setView("people")} style={{ background: "none", border: "none", color: C.cyan, cursor: "pointer", fontSize: "12px", textDecoration: "underline" }}>
+                  Find people →
+                </button>
               </div>
             )}
           </div>
@@ -521,10 +637,9 @@ export default function SocialClient({ myClerkId, myNote }) {
                       key={u.clerkId}
                       user={u}
                       isFollowed={followed.has(u.clerkId)}
-                      openingConv={openingConv}
                       online={onlineIds.has(u.clerkId)}
                       onFollow={() => handleFollow(u.clerkId)}
-                      onMessage={() => openDM(u.clerkId)}
+                      onMessage={() => handleDMClick(u)}
                     />
                   ))}
                 </div>
@@ -532,7 +647,7 @@ export default function SocialClient({ myClerkId, myNote }) {
             </div>
           </div>
 
-          {/* Bottom — Following + notes */}
+          {/* Bottom — Following */}
           <div style={{ flex: "0 0 56%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
             <div style={{ padding: "13px 24px 10px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
               <span style={{ fontSize: "11px", fontWeight: 700, color: C.sub, letterSpacing: "0.07em", textTransform: "uppercase" }}>
@@ -592,7 +707,13 @@ export default function SocialClient({ myClerkId, myNote }) {
                 </p>
               ) : (
                 following.map((u) => (
-                  <FollowCard key={u.clerkId} user={u} openingConv={openingConv} online={onlineIds.has(u.clerkId)} onMessage={() => openDM(u.clerkId)} />
+                  <FollowCard
+                    key={u.clerkId}
+                    user={u}
+                    online={onlineIds.has(u.clerkId)}
+                    onUnfollow={() => handleUnfollow(u.clerkId)}
+                    onMessage={() => handleDMClick(u)}
+                  />
                 ))
               )}
             </div>

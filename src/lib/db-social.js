@@ -177,7 +177,7 @@ export async function getInbox(myClerkId) {
 
   if (convList.length === 0) return [];
 
-  return Promise.all(
+  const rows = await Promise.all(
     convList.map(async (conv) => {
       const otherClerkId =
         conv.user1ClerkId === myClerkId ? conv.user2ClerkId : conv.user1ClerkId;
@@ -207,4 +207,7 @@ export async function getInbox(myClerkId) {
       };
     }),
   );
+
+  // Only surface conversations that actually have messages sent
+  return rows.filter((r) => r.lastMessage !== null);
 }
