@@ -12,7 +12,7 @@ function getDisplayName(user) {
   return full || "Player";
 }
 
-export async function POST() {
+export async function POST(request) {
   const session = await getRequestAuth();
   if (session.clerkEnabled && !session.isAuthenticated) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -22,6 +22,8 @@ export async function POST() {
   }
 
   const clerkId = session.userId;
+  const body = await request.json().catch(() => ({}));
+  const teamGroupId = body?.teamGroupId ?? null;
 
   // Already matched from a previous poll?
   const existing = await getRaidMatchForUser(clerkId);
@@ -35,10 +37,10 @@ export async function POST() {
     displayName = getDisplayName(user);
   } catch {}
 
-  await enqueueForRaid(clerkId, displayName);
+  await enqueueForRaid(clerkId, displayName, teamGroupId);
   await markUserQueueing(clerkId).catch(() => {});
 
-  const match = await tryMatchRaid(clerkId, displayName);
+  const match = await tryMatchRaid(clerkId, displayName, teamGroupId);
   if (match) {
     return Response.json({ matched: true, ...match });
   }

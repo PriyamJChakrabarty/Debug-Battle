@@ -5,7 +5,7 @@ import { getUserByClerkId } from "@/lib/db-users";
 import { getRaidMatchForUser } from "@/lib/db-raid";
 import SiteNav from "@/components/site-nav";
 import HeartbeatClient from "@/components/heartbeat";
-import RaidMatchmakingClient from "./raid-matchmaking-client";
+import GroupRaidLobbyClient from "./group-raid-lobby-client";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Group Raid — DebugBattle" };
@@ -17,7 +17,7 @@ function resolveDisplayName(user) {
   return full || "Player";
 }
 
-export default async function GroupRaidPage() {
+export default async function GroupRaidPage({ searchParams }) {
   if (!hasClerkCredentials()) redirect("/sign-in");
 
   const { userId } = await auth();
@@ -33,6 +33,9 @@ export default async function GroupRaidPage() {
     myName = resolveDisplayName(user);
   } catch {}
 
+  // URL params set when an invitee accepts and is redirected here
+  const { teamGroupId = null, partnerName = null } = await searchParams;
+
   return (
     <div style={{
       display: "flex", flexDirection: "column", height: "100vh",
@@ -41,7 +44,12 @@ export default async function GroupRaidPage() {
     }}>
       <HeartbeatClient />
       <SiteNav active="/group-raid-page" />
-      <RaidMatchmakingClient myName={myName} myClerkId={userId} />
+      <GroupRaidLobbyClient
+        myName={myName}
+        myClerkId={userId}
+        initialTeamGroupId={teamGroupId}
+        initialPartnerName={partnerName ? decodeURIComponent(partnerName) : null}
+      />
     </div>
   );
 }

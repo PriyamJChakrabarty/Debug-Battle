@@ -101,7 +101,7 @@ function TeamSlot({ players, teamId, totalSlots = 2 }) {
 }
 
 // ── Main ──────────────────────────────────────────────────────
-export default function RaidMatchmakingClient({ myName, myClerkId }) {
+export default function RaidMatchmakingClient({ myName, myClerkId, teamGroupId = null, partnerName = null, onBack }) {
   const [phase,      setPhase]      = useState("searching"); // searching | matched
   const [matchData,  setMatchData]  = useState(null);
   const [countdown,  setCountdown]  = useState(3);
@@ -121,7 +121,11 @@ export default function RaidMatchmakingClient({ myName, myClerkId }) {
 
     const poll = async () => {
       try {
-        const r    = await fetch("/api/raid/queue", { method: "POST" });
+        const r = await fetch("/api/raid/queue", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ teamGroupId }),
+        });
         if (!r.ok) return;
         const data = await r.json();
         if (data.matched) {
@@ -173,7 +177,7 @@ export default function RaidMatchmakingClient({ myName, myClerkId }) {
   async function handleCancel() {
     clearInterval(pollRef.current);
     try { await fetch("/api/raid/queue/cancel", { method: "DELETE" }); } catch {}
-    window.location.href = "/";
+    if (onBack) { onBack(); } else { window.location.href = "/"; }
   }
 
   const dots = ".".repeat(dotFrame % 4);
@@ -219,10 +223,10 @@ export default function RaidMatchmakingClient({ myName, myClerkId }) {
         </div>
 
         <h2 style={{ fontSize: "22px", fontWeight: 800, color: "#e8f0f3", letterSpacing: "-0.02em", margin: "0 0 6px" }}>
-          Finding your squad{dots}
+          {teamGroupId ? `Searching with ${partnerName ?? "teammate"}${dots}` : `Finding your squad${dots}`}
         </h2>
         <p style={{ fontSize: "12px", color: "#4a6570", margin: "0 0 6px" }}>
-          Need 3 more players · 2v2 Group Raid
+          {teamGroupId ? "Need 2 opponents · Pre-formed team ready" : "Need 3 more players · 2v2 Group Raid"}
         </p>
         {onlineCount !== null && (
           <p style={{ fontSize: "12px", color: "#4a6570", margin: "0 0 40px" }}>
@@ -274,7 +278,9 @@ export default function RaidMatchmakingClient({ myName, myClerkId }) {
         <div style={{ display: "flex", alignItems: "center", gap: "28px" }}>
           <TeamSlot
             teamId={0}
-            players={[{ name: myName }]}
+            players={teamGroupId && partnerName
+              ? [{ name: myName }, { name: partnerName }]
+              : [{ name: myName }]}
             totalSlots={2}
           />
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>

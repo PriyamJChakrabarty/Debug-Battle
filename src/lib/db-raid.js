@@ -12,15 +12,15 @@ const DEFAULT_CODEBASE       = "AstroStructure";
 
 // ── Queue ──────────────────────────────────────────────────────
 
-export async function enqueueForRaid(clerkId, displayName) {
+export async function enqueueForRaid(clerkId, displayName, teamGroupId = null) {
   const now = new Date();
   const expiresAt = new Date(now.getTime() + QUEUE_TTL_MS);
   await db
     .insert(raidQueue)
-    .values({ clerkId, displayName, joinedAt: now, expiresAt, matchId: null })
+    .values({ clerkId, displayName, teamGroupId, joinedAt: now, expiresAt, matchId: null })
     .onConflictDoUpdate({
       target: raidQueue.clerkId,
-      set: { displayName, joinedAt: now, expiresAt, matchId: null, updatedAt: now },
+      set: { displayName, teamGroupId, joinedAt: now, expiresAt, matchId: null, updatedAt: now },
     });
 }
 
@@ -35,25 +35,8 @@ export async function getRaidQueueEntry(clerkId) {
 
 // ── Matchmaking ────────────────────────────────────────────────
 
-export async function tryMatchRaid(myClerkId, myDisplayName) {
-  const presenceThreshold = new Date(Date.now() - PRESENCE_WINDOW_MS);
-  const needed = REQUIRED_PLAYERS - 1; // 3 others
-
-  const others = await db
-    .select({ clerkId: raidQueue.clerkId, displayName: raidQueue.displayName })
-    .from(raidQueue)
-    .innerJoin(userPresence, eq(userPresence.clerkId, raidQueue.clerkId))
-    .where(and(
-      ne(raidQueue.clerkId, myClerkId),
-      isNull(raidQueue.matchId),
-      gt(raidQueue.expiresAt, new Date()),
-      gte(userPresence.lastSeenAt, presenceThreshold),
-    ))
-    .orderBy(asc(raidQueue.joinedAt))
-    .limit(needed);
-
-  if (others.length < needed) return null;
-
+async function createMatch(playerQuad) {
+  // playerQuad = [{clerkId, displayName, teamId}, ...]
   const now    = new Date();
   const endsAt = new Date(now.getTime() + RAID_MATCH_DURATION_MS);
 
@@ -62,38 +45,96 @@ export async function tryMatchRaid(myClerkId, myDisplayName) {
     .values({ status: "active", codebaseFolder: DEFAULT_CODEBASE, startedAt: now, endsAt })
     .returning();
 
-  // Atomically claim the 3 others — abort if any were already claimed
-  const otherIds = others.map((o) => o.clerkId);
+  // Atomically claim everyone except the caller (index 0)
+  const claimIds = playerQuad.slice(1).map((p) => p.clerkId);
   const claimed  = await db
     .update(raidQueue)
     .set({ matchId: match.id, updatedAt: now })
-    .where(and(inArray(raidQueue.clerkId, otherIds), isNull(raidQueue.matchId)))
+    .where(and(inArray(raidQueue.clerkId, claimIds), isNull(raidQueue.matchId)))
     .returning({ clerkId: raidQueue.clerkId });
 
-  if (claimed.length < needed) {
-    await db
-      .update(raidMatches)
-      .set({ status: "abandoned" })
-      .where(eq(raidMatches.id, match.id))
-      .catch(() => {});
+  if (claimed.length < claimIds.length) {
+    await db.update(raidMatches).set({ status: "abandoned" }).where(eq(raidMatches.id, match.id)).catch(() => {});
     return null;
   }
 
-  // Claim my own row
-  await db
-    .update(raidQueue)
-    .set({ matchId: match.id, updatedAt: now })
-    .where(eq(raidQueue.clerkId, myClerkId));
+  // Claim the caller
+  await db.update(raidQueue).set({ matchId: match.id, updatedAt: now }).where(eq(raidQueue.clerkId, playerQuad[0].clerkId));
 
-  // Team assignment: [me, others[0]] → Team 0 ; [others[1], others[2]] → Team 1
-  await db.insert(raidMatchPlayers).values([
-    { matchId: match.id, clerkId: myClerkId,         displayName: myDisplayName,      teamId: 0 },
-    { matchId: match.id, clerkId: others[0].clerkId, displayName: others[0].displayName, teamId: 0 },
-    { matchId: match.id, clerkId: others[1].clerkId, displayName: others[1].displayName, teamId: 1 },
-    { matchId: match.id, clerkId: others[2].clerkId, displayName: others[2].displayName, teamId: 1 },
-  ]);
+  await db.insert(raidMatchPlayers).values(
+    playerQuad.map((p) => ({ matchId: match.id, clerkId: p.clerkId, displayName: p.displayName, teamId: p.teamId }))
+  );
 
   return { matchId: match.id, endsAt: match.endsAt?.toISOString?.() ?? null };
+}
+
+export async function tryMatchRaid(myClerkId, myDisplayName, teamGroupId = null) {
+  const presenceThreshold = new Date(Date.now() - PRESENCE_WINDOW_MS);
+  const now = new Date();
+
+  if (teamGroupId) {
+    // Pre-formed team: find the partner who queued with the same teamGroupId
+    const [partner] = await db
+      .select({ clerkId: raidQueue.clerkId, displayName: raidQueue.displayName })
+      .from(raidQueue)
+      .where(and(
+        eq(raidQueue.teamGroupId, teamGroupId),
+        ne(raidQueue.clerkId, myClerkId),
+        isNull(raidQueue.matchId),
+        gt(raidQueue.expiresAt, now),
+      ))
+      .limit(1);
+
+    if (!partner) return null; // Partner hasn't queued yet
+
+    // Find 2 random opponents
+    const opponents = await db
+      .select({ clerkId: raidQueue.clerkId, displayName: raidQueue.displayName })
+      .from(raidQueue)
+      .innerJoin(userPresence, eq(userPresence.clerkId, raidQueue.clerkId))
+      .where(and(
+        ne(raidQueue.clerkId, myClerkId),
+        ne(raidQueue.clerkId, partner.clerkId),
+        isNull(raidQueue.matchId),
+        gt(raidQueue.expiresAt, now),
+        gte(userPresence.lastSeenAt, presenceThreshold),
+      ))
+      .orderBy(asc(raidQueue.joinedAt))
+      .limit(2);
+
+    if (opponents.length < 2) return null;
+
+    return createMatch([
+      { clerkId: myClerkId,          displayName: myDisplayName,           teamId: 0 },
+      { clerkId: partner.clerkId,    displayName: partner.displayName,     teamId: 0 },
+      { clerkId: opponents[0].clerkId, displayName: opponents[0].displayName, teamId: 1 },
+      { clerkId: opponents[1].clerkId, displayName: opponents[1].displayName, teamId: 1 },
+    ]);
+  }
+
+  // Random 4-player path
+  const needed = REQUIRED_PLAYERS - 1;
+  const others = await db
+    .select({ clerkId: raidQueue.clerkId, displayName: raidQueue.displayName })
+    .from(raidQueue)
+    .innerJoin(userPresence, eq(userPresence.clerkId, raidQueue.clerkId))
+    .where(and(
+      ne(raidQueue.clerkId, myClerkId),
+      isNull(raidQueue.matchId),
+      gt(raidQueue.expiresAt, now),
+      gte(userPresence.lastSeenAt, presenceThreshold),
+    ))
+    .orderBy(asc(raidQueue.joinedAt))
+    .limit(needed);
+
+  if (others.length < needed) return null;
+
+  return createMatch([
+    { clerkId: myClerkId,         displayName: myDisplayName,           teamId: 0 },
+    { clerkId: others[0].clerkId, displayName: others[0].displayName,   teamId: 0 },
+    { clerkId: others[1].clerkId, displayName: others[1].displayName,   teamId: 1 },
+    { clerkId: others[2].clerkId, displayName: others[2].displayName,   teamId: 1 },
+  ]);
 }
 
 // ── Match lookup (for queue polling / reconnect) ───────────────

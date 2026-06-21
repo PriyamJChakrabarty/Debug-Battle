@@ -90,14 +90,15 @@ export const messages = pgTable("messages", {
 // ── Group Raid (2v2) ──────────────────────────────────────────
 
 export const raidQueue = pgTable("raid_queue", {
-  id:          serial("id").primaryKey(),
-  clerkId:     text("clerk_id").unique().notNull(),
-  displayName: text("display_name").notNull(),
-  joinedAt:    timestamp("joined_at",  { withTimezone: true }).defaultNow().notNull(),
-  expiresAt:   timestamp("expires_at", { withTimezone: true }).notNull(),
-  matchId:     integer("match_id"),
-  createdAt:   timestamp("created_at", { withTimezone: true }).defaultNow(),
-  updatedAt:   timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  id:           serial("id").primaryKey(),
+  clerkId:      text("clerk_id").unique().notNull(),
+  displayName:  text("display_name").notNull(),
+  joinedAt:     timestamp("joined_at",  { withTimezone: true }).defaultNow().notNull(),
+  expiresAt:    timestamp("expires_at", { withTimezone: true }).notNull(),
+  matchId:      integer("match_id"),
+  teamGroupId:  text("team_group_id"),   // UUID shared by pre-formed pairs
+  createdAt:    timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt:    timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
 
 export const raidMatches = pgTable("raid_matches", {
@@ -122,4 +123,19 @@ export const raidMatchPlayers = pgTable("raid_match_players", {
   status:       text("status").default("active").notNull(),   // active | finished
   createdAt:    timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt:    timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+// ── Raid Invitations ──────────────────────────────────────────
+
+export const raidInvitations = pgTable("raid_invitations", {
+  id:              serial("id").primaryKey(),
+  inviterClerkId:  text("inviter_clerk_id").notNull(),
+  inviteeClerkId:  text("invitee_clerk_id").notNull(),
+  inviterName:     text("inviter_name").notNull(),     // cached for notification display
+  inviteeName:     text("invitee_name").notNull(),     // cached for "Waiting for X" display
+  status:          text("status").default("pending").notNull(), // pending|accepted|rejected|expired
+  teamGroupId:     text("team_group_id"),              // UUID set on acceptance
+  expiresAt:       timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt:       timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt:       timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
