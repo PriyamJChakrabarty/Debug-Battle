@@ -34,11 +34,11 @@ const CARDS = [
     label:     "Group Raid",
     icon:      "🛡️",
     sub:       "SQUADS",
-    desc:      "Form a squad, divide bug categories between teammates, and out-debug the enemy crew together.",
-    href:      null,
+    desc:      "Full codebase, divided by speciality. Navigate the file tree, hunt bugs by category, rack up team score.",
+    href:      "/group-raid-page",
     color:     "#f5b942",
-    cta:       "Coming Soon",
-    available: false,
+    cta:       "Launch Raid →",
+    available: true,
   },
 ];
 
@@ -506,8 +506,10 @@ export default function HomeClient({ stats, history = [] }) {
           /* Group Raids */
           <EmptyState
             icon="🛡️"
-            msg="Group Raids are coming soon."
-            hint="Squad-based bug hunting is in development."
+            msg="No group raids completed yet."
+            hint="Tackle a full codebase with your team — divide by speciality, hunt every category."
+            href="/group-raid-page"
+            cta="Start a Group Raid →"
           />
         )}
       </section>
