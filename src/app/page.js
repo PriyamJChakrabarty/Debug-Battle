@@ -1,5 +1,5 @@
 import { getRequestAuth } from "@/lib/clerk-guard";
-import { getUserStats, getUserDuelHistory } from "@/lib/db-users";
+import { getUserStats, getUserDuelHistory, getUserRaidHistory } from "@/lib/db-users";
 import SiteNav from "@/components/site-nav";
 import HeartbeatClient from "@/components/heartbeat";
 import HomeClient from "./home-client";
@@ -10,14 +10,16 @@ export default async function HomePage() {
   const session = await getRequestAuth();
   const userId  = session?.userId ?? null;
 
-  let stats   = null;
-  let history = [];
+  let stats       = null;
+  let history     = [];
+  let raidHistory = [];
 
   if (userId) {
     try {
-      [stats, history] = await Promise.all([
+      [stats, history, raidHistory] = await Promise.all([
         getUserStats(userId),
         getUserDuelHistory(userId, 20),
+        getUserRaidHistory(userId, 20),
       ]);
     } catch {}
   }
@@ -31,7 +33,7 @@ export default async function HomePage() {
     }}>
       <HeartbeatClient />
       <SiteNav active="/" />
-      <HomeClient stats={stats} history={history} />
+      <HomeClient stats={stats} history={history} raidHistory={raidHistory} />
     </div>
   );
 }

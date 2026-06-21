@@ -93,42 +93,192 @@ function StatChip({ label, value, color }) {
   );
 }
 
+const TEAM_LABELS  = ["Alpha", "Bravo"];
+const TEAM_COLORS  = ["#3ddc84", "#22d3ee"];
+
+// ── Expandable row shell ──────────────────────────────────────
+function ExpandableRow({ header, children, accentColor }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{
+      background: "#080f12",
+      border: `1px solid ${open ? (accentColor + "38") : "rgba(201,214,218,0.07)"}`,
+      borderRadius: "10px",
+      overflow: "hidden",
+      transition: "border-color 0.2s",
+    }}>
+      {/* Header row */}
+      <button
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          width: "100%", background: "none", border: "none",
+          cursor: "pointer", textAlign: "left",
+          display: "flex", alignItems: "center", gap: "16px",
+          padding: "13px 18px",
+        }}
+      >
+        {header}
+        <span style={{
+          fontSize: "11px", color: "#4a6570", flexShrink: 0, marginLeft: "auto",
+          transition: "transform 0.2s",
+          display: "inline-block",
+          transform: open ? "rotate(180deg)" : "rotate(0deg)",
+        }}>
+          ▾
+        </span>
+      </button>
+
+      {/* Expanded body */}
+      <div style={{
+        maxHeight: open ? "400px" : "0px",
+        overflow: "hidden",
+        transition: "max-height 0.3s ease",
+      }}>
+        <div style={{
+          borderTop: `1px solid ${accentColor}22`,
+          padding: "16px 18px 18px",
+        }}>
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Duel history row ──────────────────────────────────────────
 function DuelRow({ duel }) {
   const meta = RESULT[duel.result] ?? RESULT.draw;
   return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: "16px",
-      background: "#080f12",
-      border: "1px solid rgba(201,214,218,0.07)",
-      borderRadius: "10px",
-      padding: "13px 18px",
-    }}>
-      <div style={{ width: "42px", textAlign: "center", flexShrink: 0 }}>
-        <div style={{ fontSize: "20px", lineHeight: 1 }}>{meta.emoji}</div>
-        <div style={{ fontSize: "9px", fontWeight: 800, color: meta.color, letterSpacing: "0.06em", marginTop: "2px" }}>
-          {meta.label}
+    <ExpandableRow
+      accentColor={meta.color}
+      header={
+        <>
+          <div style={{ width: "42px", textAlign: "center", flexShrink: 0 }}>
+            <div style={{ fontSize: "20px", lineHeight: 1 }}>{meta.emoji}</div>
+            <div style={{ fontSize: "9px", fontWeight: 800, color: meta.color, letterSpacing: "0.06em", marginTop: "2px" }}>
+              {meta.label}
+            </div>
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: "13px", fontWeight: 600, color: "#e8f0f3", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {duel.challengeSlot}
+            </div>
+            <div style={{ fontSize: "11.5px", color: "#4a6570", marginTop: "2px" }}>
+              vs {duel.opponentName}
+            </div>
+          </div>
+          <div style={{ textAlign: "right", flexShrink: 0 }}>
+            <div style={{ fontSize: "13.5px", fontWeight: 700, color: meta.color }}>
+              {duel.myScore} <span style={{ color: "#4a6570", fontWeight: 400, fontSize: "12px" }}>vs</span> {duel.opponentScore}
+            </div>
+            <div style={{ fontSize: "10.5px", color: "#4a6570", marginTop: "2px" }}>{timeAgo(duel.startedAt)}</div>
+          </div>
+        </>
+      }
+    >
+      {/* Summary card */}
+      <div style={{ display: "flex", gap: "32px", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: "10px", fontWeight: 700, color: "#3ddc84", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "6px" }}>You</div>
+          <div style={{ fontSize: "36px", fontWeight: 900, color: "#e8f0f3" }}>{duel.myScore}</div>
+          <div style={{ fontSize: "11px", color: "#4a6570", marginTop: "3px" }}>pts</div>
+        </div>
+        <div style={{ fontSize: "16px", fontWeight: 900, color: "#4a6570" }}>VS</div>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: "10px", fontWeight: 700, color: "#22d3ee", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "6px" }}>{duel.opponentName}</div>
+          <div style={{ fontSize: "36px", fontWeight: 900, color: "#e8f0f3" }}>{duel.opponentScore}</div>
+          <div style={{ fontSize: "11px", color: "#4a6570", marginTop: "3px" }}>pts</div>
         </div>
       </div>
+      <div style={{ textAlign: "center", marginTop: "12px", fontSize: "11px", color: "#4a6570" }}>
+        {duel.challengeSlot} · Match #{duel.matchId}
+      </div>
+    </ExpandableRow>
+  );
+}
 
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: "13px", fontWeight: 600, color: "#e8f0f3", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {duel.challengeSlot}
-        </div>
-        <div style={{ fontSize: "11.5px", color: "#4a6570", marginTop: "2px" }}>
-          vs {duel.opponentName}
-        </div>
-      </div>
+// ── Group Raid history row ────────────────────────────────────
+function RaidRow({ raid }) {
+  const meta     = RESULT[raid.result] ?? RESULT.draw;
+  const myTeam   = raid.teams?.find((t) => t.teamId === raid.myTeamId);
+  const opp      = raid.teams?.find((t) => t.teamId !== raid.myTeamId);
+  const myTeamColor  = TEAM_COLORS[raid.myTeamId ?? 0];
+  const oppTeamColor = TEAM_COLORS[raid.myTeamId === 0 ? 1 : 0];
 
-      <div style={{ textAlign: "right", flexShrink: 0 }}>
-        <div style={{ fontSize: "13.5px", fontWeight: 700, color: meta.color }}>
-          {duel.myScore} <span style={{ color: "#4a6570", fontWeight: 400, fontSize: "12px" }}>vs</span> {duel.opponentScore}
-        </div>
-        <div style={{ fontSize: "10.5px", color: "#4a6570", marginTop: "2px" }}>
-          {timeAgo(duel.startedAt)}
-        </div>
+  return (
+    <ExpandableRow
+      accentColor={meta.color}
+      header={
+        <>
+          <div style={{ width: "42px", textAlign: "center", flexShrink: 0 }}>
+            <div style={{ fontSize: "20px", lineHeight: 1 }}>{meta.emoji}</div>
+            <div style={{ fontSize: "9px", fontWeight: 800, color: meta.color, letterSpacing: "0.06em", marginTop: "2px" }}>
+              {meta.label}
+            </div>
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: "13px", fontWeight: 600, color: "#e8f0f3", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {raid.codebaseFolder}
+            </div>
+            <div style={{ fontSize: "11.5px", color: "#4a6570", marginTop: "2px" }}>
+              Team {TEAM_LABELS[raid.myTeamId ?? 0]} vs Team {TEAM_LABELS[raid.myTeamId === 0 ? 1 : 0]}
+            </div>
+          </div>
+          <div style={{ textAlign: "right", flexShrink: 0 }}>
+            <div style={{ fontSize: "13.5px", fontWeight: 700, color: meta.color }}>
+              {myTeam?.totalScore ?? 0}{" "}
+              <span style={{ color: "#4a6570", fontWeight: 400, fontSize: "12px" }}>vs</span>{" "}
+              {opp?.totalScore ?? 0}
+            </div>
+            <div style={{ fontSize: "10.5px", color: "#4a6570", marginTop: "2px" }}>{timeAgo(raid.startedAt)}</div>
+          </div>
+        </>
+      }
+    >
+      {/* Summary card: two teams side by side */}
+      <div style={{ display: "flex", gap: "16px" }}>
+        {[myTeam, opp].filter(Boolean).map((team, i) => {
+          const color    = i === 0 ? myTeamColor : oppTeamColor;
+          const isWinner = raid.winnerTeam === team.teamId;
+          return (
+            <div key={team.teamId} style={{
+              flex: 1,
+              background: `${color}08`,
+              border: `1px solid ${color}25`,
+              borderRadius: "8px",
+              padding: "12px 14px",
+            }}>
+              <div style={{ fontSize: "10px", fontWeight: 800, color, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "8px" }}>
+                Team {TEAM_LABELS[team.teamId]}{isWinner ? " 🏆" : ""}
+                {i === 0 && <span style={{ color: "#4a6570", fontWeight: 400 }}> (You)</span>}
+              </div>
+              {team.players.map((p) => (
+                <div key={p.clerkId} style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  padding: "2px 0",
+                }}>
+                  <span style={{ fontSize: "12px", color: p.isMe ? "#e8f0f3" : "#8ba0a6", fontWeight: p.isMe ? 700 : 400 }}>
+                    {p.isMe ? "◆ " : ""}{p.displayName}
+                  </span>
+                  <span style={{ fontSize: "12px", fontWeight: 700, color }}>{p.totalScore} pts</span>
+                </div>
+              ))}
+              <div style={{
+                marginTop: "8px", paddingTop: "6px",
+                borderTop: `1px solid ${color}20`,
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+              }}>
+                <span style={{ fontSize: "10px", color: "#4a6570", textTransform: "uppercase", letterSpacing: "0.06em" }}>Team Total</span>
+                <span style={{ fontSize: "14px", fontWeight: 900, color }}>{team.totalScore}</span>
+              </div>
+            </div>
+          );
+        })}
       </div>
-    </div>
+      <div style={{ textAlign: "center", marginTop: "10px", fontSize: "11px", color: "#4a6570" }}>
+        {raid.codebaseFolder} · Raid #{raid.matchId}
+      </div>
+    </ExpandableRow>
   );
 }
 
@@ -136,31 +286,43 @@ function DuelRow({ duel }) {
 function QuestionRow({ duel }) {
   const meta = RESULT[duel.result] ?? RESULT.draw;
   return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: "14px",
-      background: "#080f12",
-      border: "1px solid rgba(201,214,218,0.07)",
-      borderRadius: "10px",
-      padding: "12px 18px",
-    }}>
-      <div style={{ fontSize: "18px", flexShrink: 0 }}>📄</div>
-
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: "13px", fontWeight: 600, color: "#e8f0f3", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {duel.challengeSlot}
+    <ExpandableRow
+      accentColor={meta.color}
+      header={
+        <>
+          <div style={{ fontSize: "18px", flexShrink: 0 }}>📄</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: "13px", fontWeight: 600, color: "#e8f0f3", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {duel.challengeSlot}
+            </div>
+            <div style={{ fontSize: "11px", color: "#4a6570", marginTop: "2px" }}>{timeAgo(duel.startedAt)}</div>
+          </div>
+          <div style={{ textAlign: "right", flexShrink: 0 }}>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: meta.color }}>{duel.myScore} pts</div>
+            <div style={{ fontSize: "10px", color: meta.color, marginTop: "2px", letterSpacing: "0.04em" }}>
+              {meta.emoji} {meta.label}
+            </div>
+          </div>
+        </>
+      }
+    >
+      <div style={{ display: "flex", gap: "32px", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: "10px", fontWeight: 700, color: "#3ddc84", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "6px" }}>You</div>
+          <div style={{ fontSize: "36px", fontWeight: 900, color: "#e8f0f3" }}>{duel.myScore}</div>
+          <div style={{ fontSize: "11px", color: "#4a6570", marginTop: "3px" }}>pts</div>
         </div>
-        <div style={{ fontSize: "11px", color: "#4a6570", marginTop: "2px" }}>
-          {timeAgo(duel.startedAt)}
+        <div style={{ fontSize: "16px", fontWeight: 900, color: "#4a6570" }}>VS</div>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: "10px", fontWeight: 700, color: "#22d3ee", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "6px" }}>{duel.opponentName}</div>
+          <div style={{ fontSize: "36px", fontWeight: 900, color: "#e8f0f3" }}>{duel.opponentScore}</div>
+          <div style={{ fontSize: "11px", color: "#4a6570", marginTop: "3px" }}>pts</div>
         </div>
       </div>
-
-      <div style={{ textAlign: "right", flexShrink: 0 }}>
-        <div style={{ fontSize: "13px", fontWeight: 700, color: meta.color }}>{duel.myScore} pts</div>
-        <div style={{ fontSize: "10px", color: meta.color, marginTop: "2px", letterSpacing: "0.04em" }}>
-          {meta.emoji} {meta.label}
-        </div>
+      <div style={{ textAlign: "center", marginTop: "12px", fontSize: "11px", color: "#4a6570" }}>
+        {duel.challengeSlot} · Match #{duel.matchId}
       </div>
-    </div>
+    </ExpandableRow>
   );
 }
 
@@ -185,7 +347,7 @@ function EmptyState({ icon, msg, hint, href, cta }) {
 }
 
 // ── Main ──────────────────────────────────────────────────────
-export default function HomeClient({ stats, history = [] }) {
+export default function HomeClient({ stats, history = [], raidHistory = [] }) {
   const [focused,    setFocused]    = useState(1); // Duel is default active card
   const [activeTab,  setActiveTab]  = useState(0);
 
@@ -504,13 +666,19 @@ export default function HomeClient({ stats, history = [] }) {
 
         ) : (
           /* Group Raids */
-          <EmptyState
-            icon="🛡️"
-            msg="No group raids completed yet."
-            hint="Tackle a full codebase with your team — divide by speciality, hunt every category."
-            href="/group-raid-page"
-            cta="Start a Group Raid →"
-          />
+          raidHistory.length === 0 ? (
+            <EmptyState
+              icon="🛡️"
+              msg="No group raids completed yet."
+              hint="Tackle a full codebase with your team — divide by speciality, hunt every category."
+              href="/group-raid-page"
+              cta="Start a Group Raid →"
+            />
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {raidHistory.map((r) => <RaidRow key={r.matchId} raid={r} />)}
+            </div>
+          )
         )}
       </section>
 

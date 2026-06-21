@@ -1,6 +1,7 @@
 import { and, asc, eq, gt, gte, inArray, isNull, ne } from "drizzle-orm";
 import { db } from "./db";
 import { raidMatches, raidMatchPlayers, raidQueue, userPresence } from "./schema";
+import { updateBestScore } from "./db-users";
 
 // ── Constants ── change RAID_MATCH_DURATION_MS to adjust match length ──
 const QUEUE_TTL_MS           = 60_000;
@@ -199,6 +200,11 @@ export async function autoCompleteRaidIfExpired(matchId) {
     .update(raidMatches)
     .set({ status: "completed", winnerTeam, updatedAt: new Date() })
     .where(eq(raidMatches.id, matchId));
+
+  // Persist each player's match score as personal best if it's their highest
+  await Promise.all(
+    players.map((p) => updateBestScore(p.clerkId, p.totalScore).catch(() => {}))
+  );
 
   return true;
 }
