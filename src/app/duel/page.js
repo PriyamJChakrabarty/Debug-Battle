@@ -2,16 +2,18 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import VulnerabilityClient from "../vulnerability-client";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = {
-  title: "Duel — DebugBattle",
+  title: "Practice — DebugBattle",
 };
 
 export default function DuelPage() {
-  const dataPath = join(process.cwd(), "public", "data", "data.json");
-  const data = JSON.parse(readFileSync(dataPath, "utf-8"));
+  const raw      = JSON.parse(readFileSync(join(process.cwd(), "public", "data", "data.json"), "utf-8"));
+  const problems = raw.Problems;
+  const problem  = problems[Math.floor(Math.random() * problems.length)];
 
-  const codePath = join(process.cwd(), "public", "codes", data.Code);
-  const initialCode = readFileSync(codePath, "utf-8");
+  const initialCode = readFileSync(join(process.cwd(), "public", "codes", problem.Code), "utf-8");
 
-  return <VulnerabilityClient data={data} initialCode={initialCode} />;
+  return <VulnerabilityClient data={problem} initialCode={initialCode} />;
 }
