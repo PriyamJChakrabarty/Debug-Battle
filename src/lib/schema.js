@@ -12,24 +12,28 @@ export const duelQueue = pgTable("duel_queue", {
 });
 
 export const duelMatches = pgTable("duel_matches", {
-  id:            serial("id").primaryKey(),
-  status:        text("status").default("active").notNull(), // active | completed | abandoned
-  startedAt:     timestamp("started_at", { withTimezone: true }).defaultNow(),
-  endsAt:        timestamp("ends_at",    { withTimezone: true }),
-  winnerClerkId: text("winner_clerk_id"),
-  createdAt:     timestamp("created_at", { withTimezone: true }).defaultNow(),
-  updatedAt:     timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  id:             serial("id").primaryKey(),
+  status:         text("status").default("active").notNull(), // active | completed | abandoned
+  startedAt:      timestamp("started_at",  { withTimezone: true }).defaultNow(),
+  endsAt:         timestamp("ends_at",     { withTimezone: true }),
+  winnerClerkId:  text("winner_clerk_id"),
+  challengeSlot:  text("challenge_slot"),   // code filename, e.g. "UserManager.cpp"
+  challengeData:  text("challenge_data"),   // JSON of Vulnerabilities object
+  createdAt:      timestamp("created_at",  { withTimezone: true }).defaultNow(),
+  updatedAt:      timestamp("updated_at",  { withTimezone: true }).defaultNow(),
 });
 
 export const duelMatchPlayers = pgTable("duel_match_players", {
-  id:          serial("id").primaryKey(),
-  matchId:     integer("match_id").notNull(),
-  clerkId:     text("clerk_id").notNull(),
-  displayName: text("display_name").notNull(),
-  score:       integer("score").default(0).notNull(),
-  status:      text("status").default("active").notNull(), // active | finished
-  createdAt:   timestamp("created_at", { withTimezone: true }).defaultNow(),
-  updatedAt:   timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  id:            serial("id").primaryKey(),
+  matchId:       integer("match_id").notNull(),
+  clerkId:       text("clerk_id").notNull(),
+  displayName:   text("display_name").notNull(),
+  score:         integer("score").default(0).notNull(),
+  categoryIndex: integer("category_index").default(0).notNull(),
+  fixedCounts:   text("fixed_counts").default("{}").notNull(), // JSON: {Security:[0,1],...}
+  status:        text("status").default("active").notNull(),   // active | finished
+  createdAt:     timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt:     timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
 
 export const userPresence = pgTable("user_presence", {

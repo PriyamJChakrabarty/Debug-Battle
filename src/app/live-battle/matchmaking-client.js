@@ -78,34 +78,10 @@ export default function MatchmakingClient({ myClerkId, myName }) {
   const pollRef = useRef(null);
   const cdRef   = useRef(null);
 
-  // ── On mount ───────────────────────────────────────────────
-  // ?resume=1  → reconnect to an existing match (from "Return to Duel" button)
-  // no param   → always start fresh (cancel any stale queue row first)
+  // ── On mount: always cancel stale queue entry and start fresh ─
   useEffect(() => {
-    const resume = new URLSearchParams(window.location.search).get("resume") === "1";
-
-    if (resume) {
-      window.history.replaceState({}, "", "/live-battle");
-      (async () => {
-        try {
-          const r = await fetch("/api/duel/match/current");
-          if (r.ok) {
-            const { match } = await r.json();
-            if (match) {
-              setMatchData(match);
-              setPhase("matched");
-              return;
-            }
-          }
-        } catch {}
-        // No active match found — fall through to fresh search
-        fetch("/api/duel/queue/cancel", { method: "DELETE" }).catch(() => {});
-        setPhase("searching");
-      })();
-    } else {
-      fetch("/api/duel/queue/cancel", { method: "DELETE" }).catch(() => {});
-      setPhase("searching");
-    }
+    fetch("/api/duel/queue/cancel", { method: "DELETE" }).catch(() => {});
+    setPhase("searching");
   }, []);
 
   // ── Poll queue every 2s while searching ───────────────────
@@ -145,6 +121,15 @@ export default function MatchmakingClient({ myClerkId, myName }) {
     const id = setInterval(() => setDotFrame((f) => (f + 1) % 4), 400);
     return () => clearInterval(id);
   }, [phase]);
+
+  // ── Redirect to arena 2s after "DUEL STARTS" appears ──────
+  useEffect(() => {
+    if (phase !== "battle" || !matchData?.matchId) return;
+    const t = setTimeout(() => {
+      window.location.href = `/live-battle/arena/${matchData.matchId}`;
+    }, 2000);
+    return () => clearTimeout(t);
+  }, [phase, matchData?.matchId]);
 
   // ── Countdown from 3 once matched ─────────────────────────
   useEffect(() => {
@@ -364,14 +349,14 @@ export default function MatchmakingClient({ myClerkId, myName }) {
         Full duel arena coming soon.
       </p>
       <button
-        onClick={() => { window.location.href = "/"; }}
+        onClick={() => { window.location.href = `/live-battle/arena/${matchData?.matchId}`; }}
         style={{
           marginTop: "8px", fontSize: "13px", color: "#4a6570",
           textDecoration: "underline", cursor: "pointer",
           background: "none", border: "none", padding: 0,
         }}
       >
-        ← Back to home
+        Skip intro →
       </button>
     </div>
   );

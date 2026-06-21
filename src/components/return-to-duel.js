@@ -25,7 +25,7 @@ export default function ReturnToDuelButton() {
 
   return (
     <Link
-      href="/live-battle?resume=1"
+      href={`/live-battle/arena/${match.matchId}`}
       style={{
         display: "inline-flex",
         alignItems: "center",
