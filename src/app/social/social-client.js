@@ -72,17 +72,29 @@ async function api(url, opts = {}) {
   return d;
 }
 
-function Avi({ name, size = 36, color = C.green }) {
+function Avi({ name, size = 36, color = C.green, online = false }) {
+  const dotSize = Math.max(8, Math.round(size * 0.28));
   return (
-    <div style={{
-      width: size, height: size, borderRadius: "50%", flexShrink: 0,
-      background: `linear-gradient(135deg, ${color}28, ${color}0a)`,
-      border: `1.5px solid ${color}44`,
-      display: "flex", alignItems: "center", justifyContent: "center",
-      fontSize: Math.round(size * 0.4), fontWeight: 700, color,
-      userSelect: "none", letterSpacing: "-0.01em",
-    }}>
-      {(name || "?")[0].toUpperCase()}
+    <div style={{ position: "relative", flexShrink: 0, width: size, height: size }}>
+      <div style={{
+        width: size, height: size, borderRadius: "50%",
+        background: `linear-gradient(135deg, ${color}28, ${color}0a)`,
+        border: `1.5px solid ${color}44`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: Math.round(size * 0.4), fontWeight: 700, color,
+        userSelect: "none", letterSpacing: "-0.01em",
+      }}>
+        {(name || "?")[0].toUpperCase()}
+      </div>
+      {online && (
+        <div style={{
+          position: "absolute", bottom: 0, right: 0,
+          width: dotSize, height: dotSize, borderRadius: "50%",
+          background: C.green,
+          border: `2px solid ${C.bg}`,
+          boxShadow: "0 0 6px rgba(61,220,132,0.5)",
+        }} />
+      )}
     </div>
   );
 }
@@ -109,7 +121,7 @@ function Bubble({ msg, isMine }) {
   );
 }
 
-function InboxRow({ conv, active, myClerkId, onClick }) {
+function InboxRow({ conv, active, myClerkId, onClick, online }) {
   const name = conv.displayName || "Unknown";
   const last = conv.lastMessage;
   const mine = last?.senderClerkId === myClerkId;
@@ -124,7 +136,7 @@ function InboxRow({ conv, active, myClerkId, onClick }) {
         borderLeft: active ? `2px solid ${C.green}` : "2px solid transparent",
       }}
     >
-      <Avi name={name} size={38} color={C.cyan} />
+      <Avi name={name} size={38} color={C.cyan} online={online} />
       <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
           <span style={{ fontSize: "13px", fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "130px" }}>
@@ -142,7 +154,7 @@ function InboxRow({ conv, active, myClerkId, onClick }) {
   );
 }
 
-function SuggestCard({ user, isFollowed, onFollow, onMessage, openingConv }) {
+function SuggestCard({ user, isFollowed, onFollow, onMessage, openingConv, online }) {
   const name = dname(user);
   return (
     <div style={{
@@ -150,7 +162,7 @@ function SuggestCard({ user, isFollowed, onFollow, onMessage, openingConv }) {
       padding: "14px", display: "flex", flexDirection: "column", alignItems: "center", gap: "8px",
       width: "130px", flexShrink: 0,
     }}>
-      <Avi name={name} size={44} color={C.green} />
+      <Avi name={name} size={44} color={C.green} online={online} />
       <div style={{ textAlign: "center" }}>
         <div style={{ fontSize: "12px", fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "110px" }}>
           {name}
@@ -189,7 +201,7 @@ function SuggestCard({ user, isFollowed, onFollow, onMessage, openingConv }) {
   );
 }
 
-function FollowCard({ user, onMessage, openingConv }) {
+function FollowCard({ user, onMessage, openingConv, online }) {
   const name = dname(user);
   const hasNote = !!user.noteText;
   return (
@@ -198,7 +210,7 @@ function FollowCard({ user, onMessage, openingConv }) {
       padding: "10px 14px", borderRadius: "10px",
       background: C.card, border: `1px solid ${C.border}`,
     }}>
-      <Avi name={name} size={40} color={C.cyan} />
+      <Avi name={name} size={40} color={C.cyan} online={online} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: "13px", fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {name}
@@ -248,8 +260,11 @@ export default function SocialClient({ myClerkId, myNote }) {
   const [editNote, setEditNote] = useState(false);
   const [noteInput, setNoteInput] = useState(myNote || "");
 
+  const [onlineIds, setOnlineIds] = useState(new Set());
+
   const endRef = useRef(null);
   const pollRef = useRef(null);
+  const onlineRef = useRef(null);
   const activeConv = inbox.find((c) => c.id === activeConvId) ?? null;
 
   const fetchSuggested = useCallback(async () => {
@@ -288,6 +303,22 @@ export default function SocialClient({ myClerkId, myNote }) {
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    if (!myClerkId) return;
+    const refresh = async () => {
+      try {
+        const r = await fetch("/api/presence/online");
+        if (r.ok) {
+          const list = await r.json();
+          setOnlineIds(new Set(list.map((u) => u.clerkId)));
+        }
+      } catch {}
+    };
+    refresh();
+    onlineRef.current = setInterval(refresh, 5_000);
+    return () => clearInterval(onlineRef.current);
+  }, [myClerkId]);
 
   async function handleFollow(clerkId) {
     const had = followed.has(clerkId);
@@ -408,7 +439,7 @@ export default function SocialClient({ myClerkId, myNote }) {
                 </div>
               )}
               {inbox.map((conv) => (
-                <InboxRow key={conv.id} conv={conv} active={conv.id === activeConvId} myClerkId={myClerkId} onClick={() => setConvId(conv.id)} />
+                <InboxRow key={conv.id} conv={conv} active={conv.id === activeConvId} myClerkId={myClerkId} onClick={() => setConvId(conv.id)} online={onlineIds.has(conv.otherClerkId)} />
               ))}
             </div>
           </div>
@@ -491,6 +522,7 @@ export default function SocialClient({ myClerkId, myNote }) {
                       user={u}
                       isFollowed={followed.has(u.clerkId)}
                       openingConv={openingConv}
+                      online={onlineIds.has(u.clerkId)}
                       onFollow={() => handleFollow(u.clerkId)}
                       onMessage={() => openDM(u.clerkId)}
                     />
@@ -560,7 +592,7 @@ export default function SocialClient({ myClerkId, myNote }) {
                 </p>
               ) : (
                 following.map((u) => (
-                  <FollowCard key={u.clerkId} user={u} openingConv={openingConv} onMessage={() => openDM(u.clerkId)} />
+                  <FollowCard key={u.clerkId} user={u} openingConv={openingConv} online={onlineIds.has(u.clerkId)} onMessage={() => openDM(u.clerkId)} />
                 ))
               )}
             </div>

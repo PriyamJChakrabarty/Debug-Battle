@@ -1,5 +1,47 @@
 import { integer, pgTable, serial, text, timestamp, unique } from "drizzle-orm/pg-core";
 
+export const duelQueue = pgTable("duel_queue", {
+  id:          serial("id").primaryKey(),
+  clerkId:     text("clerk_id").unique().notNull(),
+  displayName: text("display_name").notNull(),
+  joinedAt:    timestamp("joined_at",  { withTimezone: true }).defaultNow().notNull(),
+  expiresAt:   timestamp("expires_at", { withTimezone: true }).notNull(),
+  matchId:     integer("match_id"),
+  createdAt:   timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt:   timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+export const duelMatches = pgTable("duel_matches", {
+  id:            serial("id").primaryKey(),
+  status:        text("status").default("active").notNull(), // active | completed | abandoned
+  startedAt:     timestamp("started_at", { withTimezone: true }).defaultNow(),
+  endsAt:        timestamp("ends_at",    { withTimezone: true }),
+  winnerClerkId: text("winner_clerk_id"),
+  createdAt:     timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt:     timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+export const duelMatchPlayers = pgTable("duel_match_players", {
+  id:          serial("id").primaryKey(),
+  matchId:     integer("match_id").notNull(),
+  clerkId:     text("clerk_id").notNull(),
+  displayName: text("display_name").notNull(),
+  score:       integer("score").default(0).notNull(),
+  status:      text("status").default("active").notNull(), // active | finished
+  createdAt:   timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt:   timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+export const userPresence = pgTable("user_presence", {
+  id:             serial("id").primaryKey(),
+  clerkId:        text("clerk_id").unique().notNull(),
+  state:          text("state").default("idle").notNull(), // idle | queueing | in_match
+  currentMatchId: text("current_match_id"),
+  lastSeenAt:     timestamp("last_seen_at", { withTimezone: true }).defaultNow().notNull(),
+  createdAt:      timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt:      timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
 export const users = pgTable("users", {
   id:        serial("id").primaryKey(),
   clerkId:   text("clerk_id").unique().notNull(),

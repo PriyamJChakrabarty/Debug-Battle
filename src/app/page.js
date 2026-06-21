@@ -1,6 +1,8 @@
 import Link from "next/link";
 
 import SiteNav from "@/components/site-nav";
+import HeartbeatClient from "@/components/heartbeat";
+import OnlinePlayersWidget from "@/components/online-players";
 
 const MODES = [
   {
@@ -58,6 +60,7 @@ const BG = {
 export default function HomePage() {
   return (
     <div style={BG.root}>
+      <HeartbeatClient />
       <SiteNav active="/" />
 
       <section style={{ padding: "110px 40px 80px", maxWidth: "1100px", margin: "0 auto", textAlign: "center" }}>
@@ -111,7 +114,7 @@ export default function HomePage() {
 
         <div style={{ display: "flex", gap: "12px", justifyContent: "center", flexWrap: "wrap" }}>
           <Link
-            href="/duel"
+            href="/live-battle"
             style={{
               background: "#3ddc84",
               color: "#0d1a1f",
@@ -126,8 +129,8 @@ export default function HomePage() {
           >
             Start a Duel →
           </Link>
-          <a
-            href="#modes"
+          <Link
+            href="/duel"
             style={{
               background: "transparent",
               color: "#c9d6da",
@@ -139,9 +142,11 @@ export default function HomePage() {
               fontWeight: 600,
             }}
           >
-            See All Modes
-          </a>
+            Solo Practice
+          </Link>
         </div>
+
+        <OnlinePlayersWidget />
 
         <div
           style={{
