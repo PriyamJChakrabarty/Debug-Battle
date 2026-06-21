@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 
 const KEYFRAMES = `
 @keyframes radar-ring {
@@ -364,15 +363,16 @@ export default function MatchmakingClient({ myClerkId, myName }) {
       <p style={{ fontSize: "13px", color: "#4a6570", margin: "8px 0 0" }}>
         Full duel arena coming soon.
       </p>
-      <Link
-        href="/"
+      <button
+        onClick={() => { window.location.href = "/"; }}
         style={{
           marginTop: "8px", fontSize: "13px", color: "#4a6570",
           textDecoration: "underline", cursor: "pointer",
+          background: "none", border: "none", padding: 0,
         }}
       >
         ← Back to home
-      </Link>
+      </button>
     </div>
   );
 }

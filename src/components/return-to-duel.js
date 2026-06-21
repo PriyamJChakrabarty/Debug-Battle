@@ -7,10 +7,18 @@ export default function ReturnToDuelButton() {
   const [match, setMatch] = useState(null);
 
   useEffect(() => {
-    fetch("/api/duel/match/current")
-      .then((r) => r.json())
-      .then(({ match }) => { if (match) setMatch(match); })
-      .catch(() => {});
+    const check = () =>
+      fetch("/api/duel/match/current")
+        .then((r) => r.json())
+        .then(({ match }) => setMatch(match ?? null))
+        .catch(() => {});
+
+    check();
+
+    // Re-check whenever the tab regains focus (browser back, alt-tab, etc.)
+    const onVisible = () => { if (document.visibilityState === "visible") check(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
 
   if (!match) return null;
