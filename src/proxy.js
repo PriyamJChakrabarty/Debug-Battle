@@ -11,6 +11,8 @@ const isProtectedRoute = createRouteMatcher([
   "/api/summarize(.*)",
   "/api/check-vulnerability(.*)",
   "/api/check-code(.*)",
+  "/api/raid(.*)",
+  "/group-raid-page(.*)",
 ]);
 
 const clerkProxy = clerkMiddleware(async (auth, req) => {

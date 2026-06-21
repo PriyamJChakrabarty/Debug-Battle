@@ -86,3 +86,40 @@ export const messages = pgTable("messages", {
   body:           text("body").notNull(),
   createdAt:      timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
+
+// ── Group Raid (2v2) ──────────────────────────────────────────
+
+export const raidQueue = pgTable("raid_queue", {
+  id:          serial("id").primaryKey(),
+  clerkId:     text("clerk_id").unique().notNull(),
+  displayName: text("display_name").notNull(),
+  joinedAt:    timestamp("joined_at",  { withTimezone: true }).defaultNow().notNull(),
+  expiresAt:   timestamp("expires_at", { withTimezone: true }).notNull(),
+  matchId:     integer("match_id"),
+  createdAt:   timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt:   timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+export const raidMatches = pgTable("raid_matches", {
+  id:             serial("id").primaryKey(),
+  status:         text("status").default("active").notNull(), // active | completed | abandoned
+  codebaseFolder: text("codebase_folder").notNull(),
+  startedAt:      timestamp("started_at", { withTimezone: true }).defaultNow(),
+  endsAt:         timestamp("ends_at",    { withTimezone: true }),
+  winnerTeam:     integer("winner_team"),                     // 0 or 1, null = draw
+  createdAt:      timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt:      timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+export const raidMatchPlayers = pgTable("raid_match_players", {
+  id:           serial("id").primaryKey(),
+  matchId:      integer("match_id").notNull(),
+  clerkId:      text("clerk_id").notNull(),
+  displayName:  text("display_name").notNull(),
+  teamId:       integer("team_id").notNull(),                 // 0 or 1
+  totalScore:   integer("total_score").default(0).notNull(),
+  fileProgress: text("file_progress").default("{}").notNull(), // JSON: {[path]:{[cat]:{fixed:[],score:0}}}
+  status:       text("status").default("active").notNull(),   // active | finished
+  createdAt:    timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt:    timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});

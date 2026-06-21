@@ -1,27 +1,47 @@
+import { redirect } from "next/navigation";
+import { auth } from "@clerk/nextjs/server";
+import { hasClerkCredentials } from "@/lib/clerk-config";
+import { getUserByClerkId } from "@/lib/db-users";
+import { getRaidMatchForUser } from "@/lib/db-raid";
 import SiteNav from "@/components/site-nav";
 import HeartbeatClient from "@/components/heartbeat";
-import GroupRaidArena from "@/components/group-raid-arena";
-import { loadCodebase } from "@/lib/load-codebase";
+import RaidMatchmakingClient from "./raid-matchmaking-client";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Group Raid — DebugBattle" };
 
-export default function GroupRaidPage() {
-  const data = loadCodebase("AstroStructure");
+function resolveDisplayName(user) {
+  if (!user) return "Player";
+  if (user.username) return user.username;
+  const full = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
+  return full || "Player";
+}
+
+export default async function GroupRaidPage() {
+  if (!hasClerkCredentials()) redirect("/sign-in");
+
+  const { userId } = await auth();
+  if (!userId) redirect("/sign-in");
+
+  // Reconnect to an existing active match
+  const existing = await getRaidMatchForUser(userId);
+  if (existing) redirect(`/group-raid-page/arena/${existing.matchId}`);
+
+  let myName = "Player";
+  try {
+    const user = await getUserByClerkId(userId);
+    myName = resolveDisplayName(user);
+  } catch {}
 
   return (
     <div style={{
-      height: "100vh",
-      display: "flex",
-      flexDirection: "column",
-      background: "#0d1a1f",
-      color: "#c9d6da",
+      display: "flex", flexDirection: "column", height: "100vh",
+      overflow: "hidden", background: "#0d1a1f",
       fontFamily: "'Segoe UI', 'Aptos', 'Trebuchet MS', sans-serif",
-      overflow: "hidden",
     }}>
       <HeartbeatClient />
       <SiteNav active="/group-raid-page" />
-      <GroupRaidArena {...data} />
+      <RaidMatchmakingClient myName={myName} myClerkId={userId} />
     </div>
   );
 }
