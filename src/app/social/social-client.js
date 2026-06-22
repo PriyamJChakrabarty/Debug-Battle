@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import TeamsPanel from "./team-panel";
 
 const C = {
   bg:      "#0d1a1f",
@@ -32,6 +33,14 @@ function IconPeople({ size = 20 }) {
       <circle cx="9" cy="7" r="4" />
       <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
       <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+
+function IconShield({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
     </svg>
   );
 }
@@ -465,6 +474,7 @@ export default function SocialClient({ myClerkId, myNote }) {
         {[
           { id: "messages", Icon: IconChat,   label: "Messages" },
           { id: "people",   Icon: IconPeople, label: "People"   },
+          { id: "teams",    Icon: IconShield, label: "Teams"    },
         ].map(({ id, Icon, label }) => (
           <button
             key={id}
@@ -614,6 +624,13 @@ export default function SocialClient({ myClerkId, myNote }) {
             )}
           </div>
         </>
+      )}
+
+      {/* ── Teams view ──────────────────────────────────────── */}
+      {view === "teams" && (
+        <div style={{ flex: 1, display: "flex", overflow: "hidden", minWidth: 0 }}>
+          <TeamsPanel myClerkId={myClerkId} />
+        </div>
       )}
 
       {/* ── People view ─────────────────────────────────────── */}

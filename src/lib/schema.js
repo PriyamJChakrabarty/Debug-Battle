@@ -125,6 +125,44 @@ export const raidMatchPlayers = pgTable("raid_match_players", {
   updatedAt:    timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
 
+// ── Teams ─────────────────────────────────────────────────────
+
+export const teams = pgTable("teams", {
+  id:             serial("id").primaryKey(),
+  name:           text("name").notNull(),
+  emoji:          text("emoji").default("🛡️").notNull(),
+  size:           integer("size").default(5).notNull(),          // max members
+  wins:           integer("wins").default(0).notNull(),
+  losses:         integer("losses").default(0).notNull(),
+  createdAt:      timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt:      timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+export const teamMembers = pgTable("team_members", {
+  id:       serial("id").primaryKey(),
+  teamId:   integer("team_id").notNull(),
+  clerkId:  text("clerk_id").unique().notNull(),       // unique: one team per player
+  role:     text("role").default("member").notNull(),  // captain | vice_captain | member
+  joinedAt: timestamp("joined_at", { withTimezone: true }).defaultNow(),
+});
+
+export const teamMessages = pgTable("team_messages", {
+  id:            serial("id").primaryKey(),
+  teamId:        integer("team_id").notNull(),
+  senderClerkId: text("sender_clerk_id").notNull(),
+  senderName:    text("sender_name").notNull(),
+  content:       text("content").notNull(),
+  createdAt:     timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
+// Explicitly registered team raids (only created via the Team Raid button)
+export const teamRaids = pgTable("team_raids", {
+  id:        serial("id").primaryKey(),
+  teamId:    integer("team_id").notNull(),
+  matchId:   integer("match_id"),           // null until the match is created
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
 // ── Raid Invitations ──────────────────────────────────────────
 
 export const raidInvitations = pgTable("raid_invitations", {
