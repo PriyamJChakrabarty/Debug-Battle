@@ -208,7 +208,8 @@ export async function getRaidMatchState(matchId, myClerkId) {
   const players = await db
     .select()
     .from(raidMatchPlayers)
-    .where(eq(raidMatchPlayers.matchId, matchId));
+    .where(eq(raidMatchPlayers.matchId, matchId))
+    .orderBy(asc(raidMatchPlayers.teamId), asc(raidMatchPlayers.id));
 
   const me = players.find((p) => p.clerkId === myClerkId);
   if (!me) return null;

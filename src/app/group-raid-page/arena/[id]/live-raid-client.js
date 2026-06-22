@@ -344,6 +344,10 @@ export default function LiveRaidClient({
   }).length;
 
   const pct = totalVulns > 0 ? Math.round((totalFixed / totalVulns) * 100) : 0;
+  const orderedTeams = useMemo(
+    () => [...teams].sort((a, b) => a.teamId - b.teamId),
+    [teams]
+  );
 
   // ── Timer ────────────────────────────────────────────────────
   useEffect(() => {
@@ -455,8 +459,7 @@ export default function LiveRaidClient({
   // END SCREEN
   // ─────────────────────────────────────────────────────────────
   if (matchEnded) {
-    const myTeam    = teams.find((t) => t.teamId === myTeamId);
-    const enemyTeam = teams.find((t) => t.teamId !== myTeamId);
+    const myTeam    = orderedTeams.find((t) => t.teamId === myTeamId);
     const weWon     = winnerTeam === myTeamId;
     const isDraw    = matchStatus === "completed" && winnerTeam === null;
 
@@ -487,7 +490,7 @@ export default function LiveRaidClient({
           border: "1px solid rgba(201,214,218,0.1)",
           borderRadius: "14px", padding: "22px 36px",
         }}>
-          {[myTeam, enemyTeam].filter(Boolean).map((team, i) => {
+          {orderedTeams.map((team, i) => {
             const color = TEAM_COLORS[team.teamId];
             const isWinner = winnerTeam === team.teamId;
             return (
@@ -693,7 +696,7 @@ export default function LiveRaidClient({
         }}>
           {/* Live scoreboard */}
           <Scoreboard
-            teams={teams}
+            teams={orderedTeams}
             myTeamId={myTeamId}
             teamSideId={teamSideId}
             timeLeft={timeLeft}
