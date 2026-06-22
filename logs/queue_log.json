@@ -1,0 +1,79 @@
+{
+  "timestamp": "2026-06-22T16:12:34.586Z",
+  "triggeredBy": "V5zronVd",
+  "summary": {
+    "totalInQueue": 4,
+    "eligible_noMatch": 4,
+    "eligible_withPresence": 4,
+    "teamGroups": 1
+  },
+  "entries": [
+    {
+      "clerkId_tail": "V5zronVd",
+      "displayName": "Priyam Jyoti Chakrabary",
+      "teamGroupId": null,
+      "matchId": null,
+      "expired": false,
+      "expiresIn_s": 59,
+      "freshPresence": true,
+      "lastSeen_ago_s": 1
+    },
+    {
+      "clerkId_tail": "LDbl7mJT",
+      "displayName": "147-Priyam",
+      "teamGroupId": null,
+      "matchId": null,
+      "expired": false,
+      "expiresIn_s": 59,
+      "freshPresence": true,
+      "lastSeen_ago_s": 0
+    },
+    {
+      "clerkId_tail": "ByYY3Bhs",
+      "displayName": "Priyam Chakrabarty",
+      "teamGroupId": "ef7a00d0-595d-455d-902f-bd680b48cfb0",
+      "matchId": null,
+      "expired": false,
+      "expiresIn_s": 58,
+      "freshPresence": true,
+      "lastSeen_ago_s": 1
+    },
+    {
+      "clerkId_tail": "1Oc2FcIr",
+      "displayName": "Priyam Jyoti Chakrabarty",
+      "teamGroupId": "ef7a00d0-595d-455d-902f-bd680b48cfb0",
+      "matchId": null,
+      "expired": false,
+      "expiresIn_s": 58,
+      "freshPresence": true,
+      "lastSeen_ago_s": 1
+    }
+  ],
+  "teamGroupDetails": [
+    {
+      "teamGroupId_tail": "0b48cfb0",
+      "members": [
+        {
+          "clerkId_tail": "ByYY3Bhs",
+          "displayName": "Priyam Chakrabarty",
+          "teamGroupId": "ef7a00d0-595d-455d-902f-bd680b48cfb0",
+          "matchId": null,
+          "expired": false,
+          "expiresIn_s": 58,
+          "freshPresence": true,
+          "lastSeen_ago_s": 1
+        },
+        {
+          "clerkId_tail": "1Oc2FcIr",
+          "displayName": "Priyam Jyoti Chakrabarty",
+          "teamGroupId": "ef7a00d0-595d-455d-902f-bd680b48cfb0",
+          "matchId": null,
+          "expired": false,
+          "expiresIn_s": 58,
+          "freshPresence": true,
+          "lastSeen_ago_s": 1
+        }
+      ]
+    }
+  ]
+}

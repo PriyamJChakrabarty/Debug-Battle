@@ -2,6 +2,7 @@ import { and, asc, desc, eq, gt, gte, inArray, isNull, ne, sql } from "drizzle-o
 import { db } from "./db";
 import { raidMatches, raidMatchPlayers, raidQueue, userPresence } from "./schema";
 import { updateBestScore } from "./db-users";
+import { resolveTeamRaidResult } from "./db-teams";
 
 // ── Constants ── change RAID_MATCH_DURATION_MS to adjust match length ──
 const QUEUE_TTL_MS           = 60_000;
@@ -287,6 +288,9 @@ export async function autoCompleteRaidIfExpired(matchId) {
   await Promise.all(
     players.map((p) => updateBestScore(p.clerkId, p.totalScore).catch(() => {}))
   );
+
+  // Best-effort: link to team record and update W/L if this was a team raid
+  resolveTeamRaidResult(matchId, players, winnerTeam).catch(() => {});
 
   return true;
 }

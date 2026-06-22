@@ -1,6 +1,6 @@
-import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import { db } from "./db";
-import { teamMembers, teamMessages, teamRaids, teams, raidMatchPlayers, raidMatches, users } from "./schema";
+import { teamMembers, teamMessages, teamRaids, teams, raidMatchPlayers, raidMatches, raidInvitations, users } from "./schema";
 
 const ROLE_RANK = { captain: 0, vice_captain: 1, member: 2 };
 
@@ -217,16 +217,91 @@ export async function getTeamMessages(teamId, limit = 60) {
 
 // ── Team Raids ──────────────────────────────────────────────────
 
-// Called by the Captain's Raid button — registers the intent. matchId filled in later.
-export async function registerTeamRaid(teamId, captainClerkId) {
+// Called by the Captain's Raid button — registers the intent. matchId and result filled in post-match.
+export async function registerTeamRaid(teamId, captainClerkId, teamGroupId) {
   const [membership] = await db.select({ role: teamMembers.role })
     .from(teamMembers)
     .where(and(eq(teamMembers.teamId, teamId), eq(teamMembers.clerkId, captainClerkId)))
     .limit(1);
   if (!membership || membership.role !== "captain") throw new Error("Only the captain can start a team raid");
 
-  const [row] = await db.insert(teamRaids).values({ teamId }).returning();
+  const [row] = await db.insert(teamRaids).values({ teamId, teamGroupId }).returning();
   return row;
+}
+
+// Called post-match — links the completed match back to the team and updates W/L.
+export async function resolveTeamRaidResult(matchId, players, winnerTeam) {
+  const clerkIds = players.map((p) => p.clerkId);
+  if (clerkIds.length === 0) return;
+
+  const invites = await db
+    .select({ sourceTeamId: raidInvitations.sourceTeamId, teamGroupId: raidInvitations.teamGroupId, inviterClerkId: raidInvitations.inviterClerkId })
+    .from(raidInvitations)
+    .where(and(
+      inArray(raidInvitations.inviteeClerkId, clerkIds),
+      isNotNull(raidInvitations.sourceTeamId),
+      eq(raidInvitations.status, "accepted"),
+    ))
+    .limit(1);
+
+  if (invites.length === 0) return; // not a team raid
+
+  const { sourceTeamId, teamGroupId, inviterClerkId } = invites[0];
+
+  // Determine which match-side the team is on by looking at the captain's player row
+  const captainPlayer = players.find((p) => p.clerkId === inviterClerkId);
+  const inviteePlayer = players.find((p) => clerkIds.includes(p.clerkId) && p.clerkId !== inviterClerkId);
+  const refPlayer     = captainPlayer ?? inviteePlayer ?? players[0];
+  const myTeamSideId  = refPlayer?.teamId ?? 0;
+
+  const result = winnerTeam === null ? "draw"
+               : winnerTeam === myTeamSideId ? "win" : "loss";
+
+  await db.update(teamRaids)
+    .set({ matchId, result })
+    .where(and(
+      eq(teamRaids.teamId, sourceTeamId),
+      eq(teamRaids.teamGroupId, teamGroupId),
+      sql`${teamRaids.matchId} IS NULL`,
+    ));
+
+  if (result === "win") {
+    await db.update(teams).set({ wins: sql`${teams.wins} + 1` }).where(eq(teams.id, sourceTeamId));
+  } else if (result === "loss") {
+    await db.update(teams).set({ losses: sql`${teams.losses} + 1` }).where(eq(teams.id, sourceTeamId));
+  }
+}
+
+// Returns { teamName, teamSideId } if the match was a team raid, else null.
+export async function getTeamNameForMatch(matchId) {
+  const players = await db
+    .select({ clerkId: raidMatchPlayers.clerkId, teamId: raidMatchPlayers.teamId })
+    .from(raidMatchPlayers)
+    .where(eq(raidMatchPlayers.matchId, matchId));
+
+  if (players.length === 0) return null;
+
+  const clerkIds = players.map((p) => p.clerkId);
+
+  const invites = await db
+    .select({ sourceTeamName: raidInvitations.sourceTeamName, inviterClerkId: raidInvitations.inviterClerkId, inviteeClerkId: raidInvitations.inviteeClerkId })
+    .from(raidInvitations)
+    .where(and(
+      inArray(raidInvitations.inviteeClerkId, clerkIds),
+      isNotNull(raidInvitations.sourceTeamId),
+      eq(raidInvitations.status, "accepted"),
+    ))
+    .limit(1);
+
+  if (invites.length === 0) return null;
+
+  const { sourceTeamName, inviterClerkId, inviteeClerkId } = invites[0];
+  const captainPlayer = players.find((p) => p.clerkId === inviterClerkId);
+  const inviteePlayer = players.find((p) => p.clerkId === inviteeClerkId);
+  const refPlayer     = captainPlayer ?? inviteePlayer;
+  const teamSideId    = refPlayer?.teamId ?? 0;
+
+  return { teamName: sourceTeamName, teamSideId };
 }
 
 // Only raids explicitly started via the Team Raid button

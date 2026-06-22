@@ -3,6 +3,7 @@ import { getUserByClerkId } from "@/lib/db-users";
 import { cancelRaidQueue, clearStaleQueueMatchId, enqueueForRaid, getRaidMatchForUser, tryMatchRaid } from "@/lib/db-raid";
 import { isTeamCancelled } from "@/lib/db-raid-invite";
 import { markUserQueueing } from "@/lib/db-presence";
+import { writeQueueLog } from "@/lib/queue-logger";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +67,9 @@ export async function POST(request) {
     console.log(`[QUEUE/route] late-match! clerkId=${clerkId.slice(-6)} matchId=${lateMatch.matchId}`);
     return Response.json({ matched: true, ...lateMatch });
   }
+
+  // Fire-and-forget: write full queue snapshot to logs/queue_log.json (rate-limited to 5s)
+  writeQueueLog(clerkId).catch(() => {});
 
   return Response.json({ matched: false });
 }

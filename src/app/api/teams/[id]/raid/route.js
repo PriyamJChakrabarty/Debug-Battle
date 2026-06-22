@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { getRequestAuth } from "@/lib/clerk-guard";
 import { getUserByClerkId } from "@/lib/db-users";
-import { getMyTeam } from "@/lib/db-teams";
+import { getMyTeam, registerTeamRaid } from "@/lib/db-teams";
 import { sendTeamInvites } from "@/lib/db-raid-invite";
 
 export const dynamic = "force-dynamic";
@@ -48,6 +48,8 @@ export async function POST(request, { params }) {
     team.id,
     team.name,
   );
+
+  await registerTeamRaid(team.id, session.userId, teamGroupId);
 
   return Response.json({
     ok:          true,
