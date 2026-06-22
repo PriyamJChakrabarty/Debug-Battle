@@ -17,9 +17,11 @@ export async function POST(request, { params }) {
   if (!result) return Response.json({ error: "Invite not found or expired" }, { status: 404 });
 
   return Response.json({
-    ok: true,
+    ok:             true,
     teamGroupId:    result.teamGroupId,
     inviterClerkId: result.inviterClerkId,
     inviterName:    result.inviterName,
+    sourceTeamId:   result.sourceTeamId,
+    sourceTeamName: result.sourceTeamName,
   });
 }

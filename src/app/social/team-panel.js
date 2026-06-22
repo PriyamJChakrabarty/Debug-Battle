@@ -540,10 +540,15 @@ function InTeamView({ team, myClerkId, onRefresh, onLeave }) {
                 onClick={async () => {
                   setRaiding(true);
                   try {
-                    await apiFetch(`/api/teams/${team.id}/raid`, { method: "POST" });
-                    alert("Team raid registered! Full matchmaking coming soon.");
-                  } catch (e) { alert(e.message); }
-                  finally { setRaiding(false); }
+                    const data = await apiFetch(`/api/teams/${team.id}/raid`, { method: "POST" });
+                    const params = new URLSearchParams({
+                      teamGroupId: data.teamGroupId,
+                      teamId:      String(data.teamId),
+                      teamName:    data.teamName,
+                      teamEmoji:   data.teamEmoji,
+                    });
+                    window.location.href = `/team-raid-wait?${params}`;
+                  } catch (e) { alert(e.message); setRaiding(false); }
                 }}
                 disabled={raiding}
                 style={{

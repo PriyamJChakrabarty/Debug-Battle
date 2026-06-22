@@ -16,13 +16,14 @@ function resolveDisplayName(user) {
   return full || "Player";
 }
 
-export default async function RaidArenaPage({ params }) {
+export default async function RaidArenaPage({ params, searchParams }) {
   if (!hasClerkCredentials()) redirect("/sign-in");
 
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
   const { id } = await params;
+  const { teamName = null } = await searchParams;
   const matchId = parseInt(id, 10);
   if (isNaN(matchId)) redirect("/group-raid-page");
 
@@ -54,6 +55,7 @@ export default async function RaidArenaPage({ params }) {
         files={codebaseData.files}
         filesCode={codebaseData.filesCode}
         fileTree={codebaseData.fileTree}
+        teamName={teamName ? decodeURIComponent(teamName) : null}
       />
     </div>
   );

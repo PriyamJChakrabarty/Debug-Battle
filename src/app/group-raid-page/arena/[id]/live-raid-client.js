@@ -16,7 +16,11 @@ const CATS = [
 ];
 const PTS_PER_FIX   = 20;
 const TEAM_COLORS   = ["#3ddc84", "#22d3ee"];
-const TEAM_LABELS   = ["Alpha", "Bravo"];
+const TEAM_LABELS_DEFAULT = ["Alpha", "Bravo"];
+function getTeamLabel(teamId, myTeamId, teamName) {
+  if (teamName && teamId === myTeamId) return teamName;
+  return TEAM_LABELS_DEFAULT[teamId] ?? `Team ${teamId}`;
+}
 
 function formatTime(secs) {
   if (secs <= 0) return "0:00";
@@ -207,7 +211,7 @@ function CategoryRow({ cat, vulns, catProg, isActive, onToggle, onCheck, checkin
 }
 
 // ── Live scoreboard (right panel top) ─────────────────────────
-function Scoreboard({ teams, myTeamId, timeLeft, matchStatus, winnerTeam }) {
+function Scoreboard({ teams, myTeamId, timeLeft, matchStatus, winnerTeam, teamName }) {
   const timerColor  = timeLeft !== null && timeLeft <= 10 ? "#ff5c5c" : "#f5b942";
   const matchEnded  = matchStatus === "completed" || matchStatus === "abandoned";
 
@@ -225,7 +229,7 @@ function Scoreboard({ teams, myTeamId, timeLeft, matchStatus, winnerTeam }) {
         </span>
         {matchEnded ? (
           <span style={{ fontSize: "11px", fontWeight: 700, color: winnerTeam !== null ? TEAM_COLORS[winnerTeam] : "#f5b942" }}>
-            {matchStatus === "abandoned" ? "⚠ Abandoned" : winnerTeam !== null ? `${TEAM_LABELS[winnerTeam]} wins!` : "Draw"}
+            {matchStatus === "abandoned" ? "⚠ Abandoned" : winnerTeam !== null ? `${getTeamLabel(winnerTeam, myTeamId, teamName)} wins!` : "Draw"}
           </span>
         ) : (
           <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
@@ -253,7 +257,7 @@ function Scoreboard({ teams, myTeamId, timeLeft, matchStatus, winnerTeam }) {
               <div style={{ display: "flex", alignItems: "center", gap: "5px", marginBottom: "6px" }}>
                 <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: color, flexShrink: 0 }} />
                 <span style={{ fontSize: "10px", fontWeight: 800, color, letterSpacing: "0.06em" }}>
-                  {TEAM_LABELS[team.teamId]}
+                  {getTeamLabel(team.teamId, myTeamId, teamName)}
                   {isWinner && " 🏆"}
                 </span>
                 <span style={{ marginLeft: "auto", fontSize: "14px", fontWeight: 900, color, fontVariantNumeric: "tabular-nums" }}>
@@ -291,6 +295,7 @@ export default function LiveRaidClient({
   matchId, myClerkId, myName,
   initialState,
   codebaseName, files, filesCode, fileTree,
+  teamName = null,
 }) {
   const [selectedPath,   setSelectedPath]   = useState(files[0]?.Path ?? null);
   const [editedCodes,    setEditedCodes]    = useState(() => ({ ...filesCode }));
@@ -482,7 +487,7 @@ export default function LiveRaidClient({
                 {i === 1 && <div style={{ fontSize: "20px", color: "#4a6570", fontWeight: 900 }}>VS</div>}
                 <div key={team.teamId} style={{ textAlign: "center" }}>
                   <div style={{ fontSize: "10px", fontWeight: 800, color, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "10px" }}>
-                    Team {TEAM_LABELS[team.teamId]}{isWinner ? " 🏆" : ""}{team.teamId === myTeamId ? " (You)" : ""}
+                    {getTeamLabel(team.teamId, myTeamId, teamName)}{isWinner ? " 🏆" : ""}{team.teamId === myTeamId ? " (You)" : ""}
                   </div>
                   <div style={{ fontSize: "38px", fontWeight: 900, color: "#e8f0f3" }}>{team.totalScore}</div>
                   <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "2px" }}>
@@ -679,6 +684,7 @@ export default function LiveRaidClient({
             timeLeft={timeLeft}
             matchStatus={matchStatus}
             winnerTeam={winnerTeam}
+            teamName={teamName}
           />
 
           {/* Vulnerability hunter header */}

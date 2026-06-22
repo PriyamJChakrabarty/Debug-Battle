@@ -12,11 +12,13 @@ export async function GET() {
   const invites = await getPendingInvitesForMe(session.userId);
   return Response.json({
     invites: invites.map((inv) => ({
-      id:             inv.id,
-      inviterClerkId: inv.inviterClerkId,
-      inviterName:    inv.inviterName,
-      createdAt:      inv.createdAt?.toISOString?.() ?? null,
-      expiresAt:      inv.expiresAt?.toISOString?.() ?? null,
+      id:              inv.id,
+      inviterClerkId:  inv.inviterClerkId,
+      inviterName:     inv.inviterName,
+      sourceTeamId:    inv.sourceTeamId    ?? null,
+      sourceTeamName:  inv.sourceTeamName  ?? null,
+      createdAt:       inv.createdAt?.toISOString?.() ?? null,
+      expiresAt:       inv.expiresAt?.toISOString?.() ?? null,
     })),
   });
 }

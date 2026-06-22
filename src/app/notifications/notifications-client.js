@@ -31,7 +31,18 @@ export default function NotificationsClient({ initialNotifications, myClerkId })
       const r    = await fetch(`/api/raid/invite/${n.id}/accept`, { method: "POST" });
       const data = await r.json();
       if (data.teamGroupId) {
-        router.push(`/group-raid-page?teamGroupId=${data.teamGroupId}&partnerName=${encodeURIComponent(data.inviterName ?? "")}`);
+        if (data.sourceTeamId) {
+          // Team raid — go to the team wait lobby
+          const params = new URLSearchParams({
+            teamGroupId: data.teamGroupId,
+            teamId:      String(data.sourceTeamId),
+            teamName:    data.sourceTeamName ?? "Your Team",
+          });
+          router.push(`/team-raid-wait?${params}`);
+        } else {
+          // Regular friend invite
+          router.push(`/group-raid-page?teamGroupId=${data.teamGroupId}&partnerName=${encodeURIComponent(data.inviterName ?? "")}`);
+        }
         return;
       }
     } catch {}
@@ -76,8 +87,8 @@ export default function NotificationsClient({ initialNotifications, myClerkId })
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: "14px", fontWeight: 600, color: "#e8f0f3", marginBottom: "4px" }}>
             {n.isSent
-              ? <>You invited <span style={{ color: "#f5b942" }}>{n.inviteeName}</span> to a Group Raid</>
-              : <><span style={{ color: "#f5b942" }}>{n.inviterName}</span> invited you to a Group Raid</>}
+              ? <>You invited <span style={{ color: "#f5b942" }}>{n.inviteeName}</span> to a {n.sourceTeamName ? <><span style={{ color: "#3ddc84" }}>{n.sourceTeamName}</span> Team Raid</> : "Group Raid"}</>
+              : <><span style={{ color: "#f5b942" }}>{n.inviterName}</span> invited you to a {n.sourceTeamName ? <><span style={{ color: "#3ddc84" }}>{n.sourceTeamName}</span> Team Raid</> : "Group Raid"}</>}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
             <span style={{

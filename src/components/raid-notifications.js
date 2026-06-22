@@ -80,7 +80,16 @@ export default function RaidNotificationBell() {
       if (data.teamGroupId) {
         setPending([]);
         setIsOpen(false);
-        router.push(`/group-raid-page?teamGroupId=${data.teamGroupId}&partnerName=${encodeURIComponent(data.inviterName ?? "")}`);
+        if (data.sourceTeamId) {
+          const params = new URLSearchParams({
+            teamGroupId: data.teamGroupId,
+            teamId:      String(data.sourceTeamId),
+            teamName:    data.sourceTeamName ?? "Your Team",
+          });
+          router.push(`/team-raid-wait?${params}`);
+        } else {
+          router.push(`/group-raid-page?teamGroupId=${data.teamGroupId}&partnerName=${encodeURIComponent(data.inviterName ?? "")}`);
+        }
       }
     } catch {}
   }
@@ -181,7 +190,10 @@ export default function RaidNotificationBell() {
                 marginBottom: count > 1 ? "8px" : "12px",
               }}>
                 <div style={{ fontSize: "13px", color: "#e8f0f3", marginBottom: "10px", lineHeight: 1.4 }}>
-                  <strong style={{ color: "#f5b942" }}>{topInvite.inviterName}</strong> wants you on their team!
+                  <strong style={{ color: "#f5b942" }}>{topInvite.inviterName}</strong>{" "}
+                  {topInvite.sourceTeamName
+                    ? <>is launching a <strong style={{ color: "#3ddc84" }}>{topInvite.sourceTeamName}</strong> Team Raid!</>
+                    : "wants you on their team!"}
                 </div>
                 <div style={{ display: "flex", gap: "7px" }}>
                   <button

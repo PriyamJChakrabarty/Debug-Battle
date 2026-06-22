@@ -60,9 +60,9 @@ function RadarRing({ delay = 0 }) {
   );
 }
 
-function TeamSlot({ players, teamId, totalSlots = 2 }) {
+function TeamSlot({ players, teamId, totalSlots = 2, label: labelOverride }) {
   const color = TEAM_COLORS[teamId];
-  const label = teamId === 0 ? "Team Alpha" : "Team Bravo";
+  const label = labelOverride ?? (teamId === 0 ? "Team Alpha" : "Team Bravo");
 
   return (
     <div style={{
@@ -101,7 +101,7 @@ function TeamSlot({ players, teamId, totalSlots = 2 }) {
 }
 
 // ── Main ──────────────────────────────────────────────────────
-export default function RaidMatchmakingClient({ myName, myClerkId, teamGroupId = null, partnerName = null, onBack }) {
+export default function RaidMatchmakingClient({ myName, myClerkId, teamGroupId = null, partnerName = null, teamName = null, onBack }) {
   const [phase,      setPhase]      = useState("searching"); // searching | matched
   const [matchData,  setMatchData]  = useState(null);
   const [countdown,  setCountdown]  = useState(3);
@@ -170,7 +170,10 @@ export default function RaidMatchmakingClient({ myName, myClerkId, teamGroupId =
       setCountdown((c) => {
         if (c <= 1) {
           clearInterval(cdRef.current);
-          window.location.href = `/group-raid-page/arena/${matchData.matchId}`;
+          const arenaUrl = teamName
+            ? `/group-raid-page/arena/${matchData.matchId}?teamName=${encodeURIComponent(teamName)}`
+            : `/group-raid-page/arena/${matchData.matchId}`;
+          window.location.href = arenaUrl;
           return 0;
         }
         return c - 1;
@@ -287,6 +290,7 @@ export default function RaidMatchmakingClient({ myName, myClerkId, teamGroupId =
               ? [{ name: myName }, { name: partnerName }]
               : [{ name: myName }]}
             totalSlots={2}
+            label={teamName ?? undefined}
           />
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>
             <span style={{ fontSize: "22px", fontWeight: 900, color: "rgba(201,214,218,0.15)", letterSpacing: "0.06em" }}>
@@ -308,7 +312,12 @@ export default function RaidMatchmakingClient({ myName, myClerkId, teamGroupId =
         </p>
 
         <button
-          onClick={() => { window.location.href = `/group-raid-page/arena/${matchData?.matchId}`; }}
+          onClick={() => {
+            const url = teamName
+              ? `/group-raid-page/arena/${matchData?.matchId}?teamName=${encodeURIComponent(teamName)}`
+              : `/group-raid-page/arena/${matchData?.matchId}`;
+            window.location.href = url;
+          }}
           style={{ fontSize: "12px", color: "#4a6570", textDecoration: "underline", cursor: "pointer", background: "none", border: "none", padding: 0 }}
         >
           Skip →
