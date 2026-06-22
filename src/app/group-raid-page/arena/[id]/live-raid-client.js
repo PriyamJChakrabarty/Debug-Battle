@@ -287,6 +287,12 @@ function Scoreboard({ teams, myTeamId, teamSideId, timeLeft, matchStatus, winner
           );
         })}
       </div>
+
+      {teamName && (
+        <div style={{ marginTop: "8px", fontSize: "10px", color: "#4a6570", lineHeight: 1.5 }}>
+          Team raid tracked: Social team W/L and Past Raids sync automatically once this match is finalized.
+        </div>
+      )}
     </div>
   );
 }
@@ -504,6 +510,12 @@ export default function LiveRaidClient({
             );
           })}
         </div>
+
+        {teamName && (
+          <p style={{ margin: "-8px 0 0", fontSize: "12px", color: "#8ba0a6", textAlign: "center" }}>
+            This team raid updates {teamName} in Social with the final team record and Past Raids entry.
+          </p>
+        )}
 
         <div style={{ display: "flex", gap: "12px" }}>
           <button

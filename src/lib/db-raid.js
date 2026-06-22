@@ -289,8 +289,10 @@ export async function autoCompleteRaidIfExpired(matchId) {
     players.map((p) => updateBestScore(p.clerkId, p.totalScore).catch(() => {}))
   );
 
-  // Best-effort: link to team record and update W/L if this was a team raid
-  resolveTeamRaidResult(matchId, players, winnerTeam).catch(() => {});
+  // Link to team record and update W/L if this was a team raid
+  await resolveTeamRaidResult(matchId, players, winnerTeam).catch((err) => {
+    console.error("[autoComplete] resolveTeamRaidResult failed:", err?.message ?? err);
+  });
 
   return true;
 }

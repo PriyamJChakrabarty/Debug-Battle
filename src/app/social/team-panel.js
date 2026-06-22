@@ -39,7 +39,7 @@ function timeAgo(d) {
 }
 
 async function apiFetch(url, opts = {}) {
-  const r = await fetch(url, { ...opts, headers: { "Content-Type": "application/json", ...opts.headers } });
+  const r = await fetch(url, { cache: "no-store", ...opts, headers: { "Content-Type": "application/json", ...opts.headers } });
   const d = await r.json();
   if (!r.ok) throw new Error(d?.error || "Request failed");
   return d;
@@ -146,17 +146,22 @@ function TeamChat({ teamId, myClerkId }) {
   const endRef   = useRef(null);
   const pollRef  = useRef(null);
 
-  const fetchMsgs = async () => {
-    try {
-      const data = await apiFetch(`/api/teams/${teamId}/messages`);
-      setMessages(data);
-    } catch {}
-  };
-
   useEffect(() => {
-    fetchMsgs();
-    pollRef.current = setInterval(fetchMsgs, 3000);
-    return () => clearInterval(pollRef.current);
+    let active = true;
+
+    const load = async () => {
+      try {
+        const data = await apiFetch(`/api/teams/${teamId}/messages`);
+        if (active) setMessages(data);
+      } catch {}
+    };
+
+    load();
+    pollRef.current = setInterval(load, 3000);
+    return () => {
+      active = false;
+      clearInterval(pollRef.current);
+    };
   }, [teamId]);
 
   useEffect(() => {
@@ -172,7 +177,7 @@ function TeamChat({ teamId, myClerkId }) {
       await apiFetch(`/api/teams/${teamId}/messages`, {
         method: "POST", body: JSON.stringify({ content: text }),
       });
-      await fetchMsgs();
+      setMessages(await apiFetch(`/api/teams/${teamId}/messages`));
     } catch { setInput(text); }
     finally { setSending(false); }
   }
@@ -250,8 +255,24 @@ function PastRaids({ teamId }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    apiFetch(`/api/teams/${teamId}/raids`)
-      .then(setRaids).catch(() => {}).finally(() => setLoading(false));
+    let active = true;
+
+    const load = async () => {
+      try {
+        const data = await apiFetch(`/api/teams/${teamId}/raids`);
+        if (active) setRaids(data);
+      } catch {}
+      finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    load();
+    const pollId = setInterval(load, 5000);
+    return () => {
+      active = false;
+      clearInterval(pollId);
+    };
   }, [teamId]);
 
   const RESULT = {
@@ -635,7 +656,27 @@ export default function TeamsPanel({ myClerkId }) {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchTeam(); }, []);
+  useEffect(() => {
+    let active = true;
+
+    const load = async () => {
+      try {
+        const data = await apiFetch("/api/teams/my");
+        if (active) setTeam(data);
+      } catch {
+        if (active) setTeam(null);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    load();
+    const pollId = setInterval(load, 5000);
+    return () => {
+      active = false;
+      clearInterval(pollId);
+    };
+  }, []);
 
   async function handleLeave() {
     if (!team) return;

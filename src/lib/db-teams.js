@@ -217,15 +217,17 @@ export async function getTeamMessages(teamId, limit = 60) {
 
 // ── Team Raids ──────────────────────────────────────────────────
 
-// Called by the Captain's Raid button — registers the intent. matchId and result filled in post-match.
+// Called by the Captain's Raid button — registers the intent. matchId is filled in post-match.
 export async function registerTeamRaid(teamId, captainClerkId, teamGroupId) {
+  void teamGroupId;
+
   const [membership] = await db.select({ role: teamMembers.role })
     .from(teamMembers)
     .where(and(eq(teamMembers.teamId, teamId), eq(teamMembers.clerkId, captainClerkId)))
     .limit(1);
   if (!membership || membership.role !== "captain") throw new Error("Only the captain can start a team raid");
 
-  const [row] = await db.insert(teamRaids).values({ teamId, teamGroupId }).returning();
+  const [row] = await db.insert(teamRaids).values({ teamId }).returning();
   return row;
 }
 
@@ -234,8 +236,15 @@ export async function resolveTeamRaidResult(matchId, players, winnerTeam) {
   const clerkIds = players.map((p) => p.clerkId);
   if (clerkIds.length === 0) return;
 
+  console.log(`[resolveTeamRaidResult] matchId=${matchId} players=${clerkIds.map((c) => c.slice(-6))} winnerTeam=${winnerTeam}`);
+
   const invites = await db
-    .select({ sourceTeamId: raidInvitations.sourceTeamId, teamGroupId: raidInvitations.teamGroupId, inviterClerkId: raidInvitations.inviterClerkId })
+    .select({
+      sourceTeamId: raidInvitations.sourceTeamId,
+      teamGroupId: raidInvitations.teamGroupId,
+      inviterClerkId: raidInvitations.inviterClerkId,
+      inviteeClerkId: raidInvitations.inviteeClerkId,
+    })
     .from(raidInvitations)
     .where(and(
       inArray(raidInvitations.inviteeClerkId, clerkIds),
@@ -244,31 +253,66 @@ export async function resolveTeamRaidResult(matchId, players, winnerTeam) {
     ))
     .limit(1);
 
-  if (invites.length === 0) return; // not a team raid
+  console.log(`[resolveTeamRaidResult] invite lookup returned ${invites.length} row(s):`, JSON.stringify(invites));
 
-  const { sourceTeamId, teamGroupId, inviterClerkId } = invites[0];
+  if (invites.length === 0) {
+    console.log(`[resolveTeamRaidResult] no team invite found — skipping (not a team raid or invite missing sourceTeamId)`);
+    return;
+  }
 
-  // Determine which match-side the team is on by looking at the captain's player row
+  const { sourceTeamId, teamGroupId, inviterClerkId, inviteeClerkId } = invites[0];
+
   const captainPlayer = players.find((p) => p.clerkId === inviterClerkId);
-  const inviteePlayer = players.find((p) => clerkIds.includes(p.clerkId) && p.clerkId !== inviterClerkId);
-  const refPlayer     = captainPlayer ?? inviteePlayer ?? players[0];
-  const myTeamSideId  = refPlayer?.teamId ?? 0;
+  const inviteePlayer = players.find((p) => p.clerkId === inviteeClerkId);
+  const refPlayer     = captainPlayer ?? inviteePlayer ?? null;
+  const myTeamSideId  = refPlayer?.teamId ?? null;
+
+  if (myTeamSideId === null) {
+    console.log(`[resolveTeamRaidResult] could not determine the source team's side for teamId=${sourceTeamId}`);
+    return;
+  }
 
   const result = winnerTeam === null ? "draw"
                : winnerTeam === myTeamSideId ? "win" : "loss";
 
-  await db.update(teamRaids)
-    .set({ matchId, result })
+  console.log(`[resolveTeamRaidResult] teamId=${sourceTeamId} teamGroupId=${teamGroupId?.slice(-8)} side=${myTeamSideId} result=${result}`);
+
+  const [pendingRaid] = await db
+    .select({ id: teamRaids.id })
+    .from(teamRaids)
     .where(and(
       eq(teamRaids.teamId, sourceTeamId),
-      eq(teamRaids.teamGroupId, teamGroupId),
       sql`${teamRaids.matchId} IS NULL`,
-    ));
+    ))
+    .orderBy(desc(teamRaids.createdAt))
+    .limit(1);
+
+  if (!pendingRaid) {
+    console.log(`[resolveTeamRaidResult] no pending team raid registration found for teamId=${sourceTeamId}`);
+    return;
+  }
+
+  const updated = await db.update(teamRaids)
+    .set({ matchId })
+    .where(and(
+      eq(teamRaids.id, pendingRaid.id),
+      sql`${teamRaids.matchId} IS NULL`,
+    ))
+    .returning({ id: teamRaids.id });
+
+  console.log(`[resolveTeamRaidResult] team_raids updated ${updated.length} row(s)`);
+
+  if (updated.length === 0) {
+    console.log(`[resolveTeamRaidResult] team raid already linked for teamId=${sourceTeamId}; skipping W/L update`);
+    return;
+  }
 
   if (result === "win") {
     await db.update(teams).set({ wins: sql`${teams.wins} + 1` }).where(eq(teams.id, sourceTeamId));
+    console.log(`[resolveTeamRaidResult] incremented wins for teamId=${sourceTeamId}`);
   } else if (result === "loss") {
     await db.update(teams).set({ losses: sql`${teams.losses} + 1` }).where(eq(teams.id, sourceTeamId));
+    console.log(`[resolveTeamRaidResult] incremented losses for teamId=${sourceTeamId}`);
   }
 }
 
