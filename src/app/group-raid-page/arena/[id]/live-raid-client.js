@@ -413,6 +413,7 @@ export default function LiveRaidClient({
     return () => clearInterval(timerRef.current);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+
   // ── Poll match state every 2s ─────────────────────────────────
   useEffect(() => {
     if (matchEnded) return;
