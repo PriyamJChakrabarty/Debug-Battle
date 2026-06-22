@@ -49,6 +49,7 @@ export default function GroupRaidLobbyClient({ myName, myClerkId, initialTeamGro
   const [friendsLoading, setFriendLoading] = useState(false);
   // { [inviteeClerkId]: { status, id, teamGroupId, inviteeName } }
   const [inviteMap, setInviteMap]       = useState({});
+  const [activeInviteId, setActiveInviteId] = useState(null);
   const [search, setSearch]             = useState("");
 
   const pollRef = useRef(null);
@@ -98,7 +99,11 @@ export default function GroupRaidLobbyClient({ myName, myClerkId, initialTeamGro
         setInviteMap(map);
 
         // Detect acceptance — transition to team matching
-        const accepted = (data.invites ?? []).find((i) => i.status === "accepted" && i.teamGroupId);
+        const accepted = activeInviteId
+          ? (data.invites ?? []).find((i) =>
+              i.id === activeInviteId && i.status === "accepted" && i.teamGroupId
+            )
+          : null;
         if (accepted && active) {
           active = false;
           setTeamGroupId(accepted.teamGroupId);
@@ -111,7 +116,7 @@ export default function GroupRaidLobbyClient({ myName, myClerkId, initialTeamGro
     tick();
     pollRef.current = setInterval(tick, 2000);
     return () => { active = false; clearInterval(pollRef.current); };
-  }, [phase]);
+  }, [phase, activeInviteId]);
 
   async function handleInvite(friend) {
     const r = await fetch("/api/raid/invite", {
@@ -121,6 +126,7 @@ export default function GroupRaidLobbyClient({ myName, myClerkId, initialTeamGro
     });
     if (r.ok) {
       const data = await r.json();
+      setActiveInviteId(data.inviteId);
       setInviteMap((prev) => ({
         ...prev,
         [friend.clerkId]: { status: "pending", id: data.inviteId },
@@ -131,6 +137,7 @@ export default function GroupRaidLobbyClient({ myName, myClerkId, initialTeamGro
   function handleBackFromMatchmaking() {
     // Cancel queue and return to lobby
     fetch("/api/raid/queue/cancel", { method: "DELETE" }).catch(() => {});
+    setActiveInviteId(null);
     setPhase("lobby");
   }
 
@@ -176,7 +183,10 @@ export default function GroupRaidLobbyClient({ myName, myClerkId, initialTeamGro
             display: "flex", alignItems: "center", gap: "16px", flexShrink: 0,
           }}>
             <button
-              onClick={() => setPhase("lobby")}
+              onClick={() => {
+                setActiveInviteId(null);
+                setPhase("lobby");
+              }}
               style={{
                 background: "transparent", border: "1px solid rgba(201,214,218,0.15)",
                 color: "#9ca3af", cursor: "pointer", padding: "6px 14px",
@@ -326,7 +336,10 @@ export default function GroupRaidLobbyClient({ myName, myClerkId, initialTeamGro
 
           {/* Invite Friends */}
           <button
-            onClick={() => setPhase("invite")}
+            onClick={() => {
+              setActiveInviteId(null);
+              setPhase("invite");
+            }}
             style={{
               background: "rgba(61,220,132,0.05)", border: "1px solid rgba(61,220,132,0.2)",
               borderRadius: "16px", padding: "32px 36px", cursor: "pointer",
