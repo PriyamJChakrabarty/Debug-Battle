@@ -256,6 +256,44 @@ export async function updateRaidPlayerProgress(matchId, clerkId, fileProgress, t
     .where(and(eq(raidMatchPlayers.matchId, matchId), eq(raidMatchPlayers.clerkId, clerkId)));
 }
 
+function getRaidWinnerTeam(players) {
+  const teamScores = [0, 1].map((teamId) =>
+    players
+      .filter((player) => player.teamId === teamId)
+      .reduce((score, player) => score + player.totalScore, 0)
+  );
+
+  if (teamScores[0] > teamScores[1]) return 0;
+  if (teamScores[1] > teamScores[0]) return 1;
+  return null;
+}
+
+export async function finalizeRaidMatch(matchId, players = null) {
+  const matchPlayers = players ?? await db
+    .select()
+    .from(raidMatchPlayers)
+    .where(eq(raidMatchPlayers.matchId, matchId));
+
+  if (matchPlayers.length === 0) return { winnerTeam: null, players: [] };
+
+  const winnerTeam = getRaidWinnerTeam(matchPlayers);
+
+  await db
+    .update(raidMatches)
+    .set({ status: "completed", winnerTeam, updatedAt: new Date() })
+    .where(eq(raidMatches.id, matchId));
+
+  await Promise.all(
+    matchPlayers.map((player) => updateBestScore(player.clerkId, player.totalScore).catch(() => {}))
+  );
+
+  await resolveTeamRaidResult(matchId, matchPlayers, winnerTeam).catch((err) => {
+    console.error("[finalizeRaidMatch] resolveTeamRaidResult failed:", err?.message ?? err);
+  });
+
+  return { winnerTeam, players: matchPlayers };
+}
+
 // ── Auto-complete when timer expires ──────────────────────────
 
 export async function autoCompleteRaidIfExpired(matchId) {
@@ -267,33 +305,6 @@ export async function autoCompleteRaidIfExpired(matchId) {
 
   if (!match || !match.endsAt || new Date() <= new Date(match.endsAt)) return false;
 
-  const players = await db
-    .select()
-    .from(raidMatchPlayers)
-    .where(eq(raidMatchPlayers.matchId, matchId));
-
-  const teamScores = [0, 1].map((t) =>
-    players.filter((p) => p.teamId === t).reduce((s, p) => s + p.totalScore, 0)
-  );
-
-  let winnerTeam = null;
-  if (teamScores[0] > teamScores[1]) winnerTeam = 0;
-  else if (teamScores[1] > teamScores[0]) winnerTeam = 1;
-
-  await db
-    .update(raidMatches)
-    .set({ status: "completed", winnerTeam, updatedAt: new Date() })
-    .where(eq(raidMatches.id, matchId));
-
-  // Persist each player's match score as personal best if it's their highest
-  await Promise.all(
-    players.map((p) => updateBestScore(p.clerkId, p.totalScore).catch(() => {}))
-  );
-
-  // Link to team record and update W/L if this was a team raid
-  await resolveTeamRaidResult(matchId, players, winnerTeam).catch((err) => {
-    console.error("[autoComplete] resolveTeamRaidResult failed:", err?.message ?? err);
-  });
-
+  await finalizeRaidMatch(matchId);
   return true;
 }

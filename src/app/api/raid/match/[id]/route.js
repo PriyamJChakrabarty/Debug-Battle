@@ -39,5 +39,9 @@ export async function GET(request, { params }) {
     });
   }
 
-  return Response.json(state);
+  return Response.json(state, {
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate",
+    },
+  });
 }

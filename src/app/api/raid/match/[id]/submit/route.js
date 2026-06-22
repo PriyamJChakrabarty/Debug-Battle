@@ -4,11 +4,12 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { raidMatchPlayers, raidMatches } from "@/lib/schema";
 import { getRequestAuth } from "@/lib/clerk-guard";
-import { updateRaidPlayerProgress } from "@/lib/db-raid";
+import { finalizeRaidMatch, updateRaidPlayerProgress } from "@/lib/db-raid";
 
 export const dynamic = "force-dynamic";
 
 const PTS_PER_FIX = 20;
+const SUBMIT_GRACE_MS = 5_000;
 
 const SYSTEM_PROMPT = `You are a strict code vulnerability reviewer for a security training exercise.
 
@@ -59,9 +60,13 @@ export async function POST(request, { params }) {
   if (!userCode?.trim()) return Response.json({ error: "No code." },       { status: 400 });
   if (!process.env.GROQ_API_KEY) return Response.json({ error: "GROQ_API_KEY not set." }, { status: 500 });
 
-  // Verify match is active and player belongs to it
+  // Allow a short grace window so in-flight last-second submissions can still settle the final score.
   const [match] = await db.select().from(raidMatches).where(eq(raidMatches.id, matchId)).limit(1);
-  if (!match || match.status !== "active") {
+  const endsAtMs = match?.endsAt ? new Date(match.endsAt).getTime() : null;
+  const nowMs = Date.now();
+  const submitWindowClosed = endsAtMs !== null && nowMs > endsAtMs + SUBMIT_GRACE_MS;
+
+  if (!match || match.status === "abandoned" || submitWindowClosed) {
     return Response.json({ error: "Match not active." }, { status: 400 });
   }
 
@@ -153,6 +158,12 @@ Required remediation: ${vuln["Correct Code"]}`;
 
   const newTotalScore = player.totalScore + addedScore;
   await updateRaidPlayerProgress(matchId, session.userId, fileProgress, newTotalScore);
+
+  if (match.status === "completed" || (endsAtMs !== null && nowMs >= endsAtMs)) {
+    await finalizeRaidMatch(matchId).catch((err) => {
+      console.error("[raid/submit] finalizeRaidMatch failed:", err?.message ?? err);
+    });
+  }
 
   return Response.json({
     fixed:        newFixed,

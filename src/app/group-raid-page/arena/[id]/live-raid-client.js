@@ -29,6 +29,24 @@ function getFormalTeamResult(teamSideId, winnerTeam) {
   return { delta: -1, label: "LOSS" };
 }
 
+function mergePlayerScoreIntoTeams(currentTeams, myTeamId, myClerkId, nextScore) {
+  return currentTeams.map((team) => {
+    if (team.teamId !== myTeamId) return team;
+
+    const players = team.players.map((player) =>
+      player.clerkId === myClerkId
+        ? { ...player, totalScore: nextScore }
+        : player
+    );
+
+    return {
+      ...team,
+      players,
+      totalScore: players.reduce((score, player) => score + player.totalScore, 0),
+    };
+  });
+}
+
 function formatTime(secs) {
   if (secs <= 0) return "0:00";
   const m = Math.floor(secs / 60);
@@ -358,6 +376,33 @@ export default function LiveRaidClient({
     [formalTeams]
   );
 
+  function applyMatchSnapshot(snapshot) {
+    if (!snapshot) return;
+
+    if (snapshot.teams) setTeams(snapshot.teams);
+
+    if (snapshot.me) {
+      setMyTotalScore(snapshot.me.totalScore);
+      setProgress(snapshot.me.fileProgress ?? {});
+    }
+
+    if (snapshot.status && snapshot.status !== "active") {
+      setMatchStatus(snapshot.status);
+      setWinnerTeam(snapshot.winnerTeam ?? null);
+      clearInterval(pollRef.current);
+      clearInterval(timerRef.current);
+    }
+  }
+
+  async function syncMatchState() {
+    const response = await fetch(`/api/raid/match/${matchId}`, { cache: "no-store" });
+    if (!response.ok) return null;
+
+    const snapshot = await response.json();
+    applyMatchSnapshot(snapshot);
+    return snapshot;
+  }
+
   // ── Timer ────────────────────────────────────────────────────
   useEffect(() => {
     if (!initialState.endsAt) return;
@@ -373,24 +418,11 @@ export default function LiveRaidClient({
     if (matchEnded) return;
     const poll = async () => {
       try {
-        const r = await fetch(`/api/raid/match/${matchId}`);
-        if (!r.ok) return;
-        const d = await r.json();
-        if (d.teams) setTeams(d.teams);
-        if (d.status && d.status !== "active") {
-          setMatchStatus(d.status);
-          setWinnerTeam(d.winnerTeam ?? null);
-          clearInterval(pollRef.current);
-          clearInterval(timerRef.current);
-        }
-        if (d.me) {
-          setMyTotalScore(d.me.totalScore);
-          setProgress(d.me.fileProgress ?? {});
-        }
+        await syncMatchState();
       } catch {}
     };
     poll();
-    pollRef.current = setInterval(poll, 2000);
+    pollRef.current = setInterval(poll, 1000);
     return () => clearInterval(pollRef.current);
   }, [matchEnded]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -398,15 +430,15 @@ export default function LiveRaidClient({
   useEffect(() => {
     if (timeLeft === 0 && !matchEnded) {
       clearInterval(timerRef.current);
-      fetch(`/api/raid/match/${matchId}`)
-        .then((r) => r.json())
-        .then((d) => {
-          setMatchStatus(d.status ?? "completed");
-          setWinnerTeam(d.winnerTeam ?? null);
-          if (d.teams) setTeams(d.teams);
-          clearInterval(pollRef.current);
-        })
-        .catch(() => setMatchStatus("completed"));
+      const timeoutId = setTimeout(() => {
+        syncMatchState()
+          .then((snapshot) => {
+            if (!snapshot?.status) setMatchStatus("completed");
+          })
+          .catch(() => setMatchStatus("completed"));
+      }, 0);
+
+      return () => clearTimeout(timeoutId);
     }
   }, [timeLeft]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -446,17 +478,22 @@ export default function LiveRaidClient({
       const newlyFixed = data.fixed ?? [];
       const allFixed   = data.allFixed ?? [...new Set([...alreadyFixed, ...newlyFixed])];
       const added      = newlyFixed.length * PTS_PER_FIX;
+      const nextProgress = data.fileProgress ?? (() => {
+        const updatedProgress = { ...progress };
+        const currentFileProgress = { ...(updatedProgress[selectedPath] ?? {}) };
+        const prevCat = currentFileProgress[catKey] ?? { fixed: [], score: 0 };
+        currentFileProgress[catKey] = { fixed: allFixed, score: prevCat.score + added };
+        updatedProgress[selectedPath] = currentFileProgress;
+        return updatedProgress;
+      })();
+      const nextScore = data.newScore ?? myTotalScore + added;
 
       // Optimistic local update
-      setProgress(data.fileProgress ?? ((prev) => {
-        const next = { ...prev };
-        if (!next[selectedPath]) next[selectedPath] = {};
-        const prevCat = next[selectedPath][catKey] ?? { fixed: [], score: 0 };
-        next[selectedPath][catKey] = { fixed: allFixed, score: prevCat.score + added };
-        return next;
-      }));
-      setMyTotalScore(data.newScore ?? myTotalScore + added);
+      setProgress(nextProgress);
+      setMyTotalScore(nextScore);
+      setTeams((currentTeams) => mergePlayerScoreIntoTeams(currentTeams, myTeamId, myClerkId, nextScore));
       setLastCheck({ category: catKey, added, newlyFixed, allFixed });
+      await syncMatchState().catch(() => {});
     } catch (err) {
       setLastCheck({ category: catKey, error: err.message });
     } finally {
