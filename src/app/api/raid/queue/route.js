@@ -1,6 +1,6 @@
 import { getRequestAuth } from "@/lib/clerk-guard";
 import { getUserByClerkId } from "@/lib/db-users";
-import { cancelRaidQueue, enqueueForRaid, getRaidMatchForUser, tryMatchRaid } from "@/lib/db-raid";
+import { cancelRaidQueue, clearStaleQueueMatchId, enqueueForRaid, getRaidMatchForUser, tryMatchRaid } from "@/lib/db-raid";
 import { isTeamCancelled } from "@/lib/db-raid-invite";
 import { markUserQueueing } from "@/lib/db-presence";
 
@@ -47,17 +47,23 @@ export async function POST(request) {
     displayName = getDisplayName(user);
   } catch {}
 
+  // Clear any stale matchId so COALESCE in enqueueForRaid doesn't lock this player
+  // out of opponent searches (getRaidMatchForUser already confirmed no active match above)
+  await clearStaleQueueMatchId(clerkId).catch(() => {});
+
   await enqueueForRaid(clerkId, displayName, teamGroupId);
   await markUserQueueing(clerkId).catch(() => {});
 
   const match = await tryMatchRaid(clerkId, displayName, teamGroupId);
   if (match) {
+    console.log(`[QUEUE/route] matched! clerkId=${clerkId.slice(-6)} matchId=${match.matchId}`);
     return Response.json({ matched: true, ...match });
   }
 
   // A concurrent request may have claimed this player between our pre-enqueue check and now
   const lateMatch = await getRaidMatchForUser(clerkId);
   if (lateMatch) {
+    console.log(`[QUEUE/route] late-match! clerkId=${clerkId.slice(-6)} matchId=${lateMatch.matchId}`);
     return Response.json({ matched: true, ...lateMatch });
   }
 

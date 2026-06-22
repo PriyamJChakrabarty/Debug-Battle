@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, gte, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, isNull, ne, sql } from "drizzle-orm";
 import { db } from "./db";
 import { raidMatches, raidMatchPlayers, raidQueue, userPresence } from "./schema";
 import { updateBestScore } from "./db-users";
@@ -15,6 +15,7 @@ const DEFAULT_CODEBASE       = "AstroStructure";
 export async function enqueueForRaid(clerkId, displayName, teamGroupId = null) {
   const now = new Date();
   const expiresAt = new Date(now.getTime() + QUEUE_TTL_MS);
+  console.log(`[QUEUE] enqueue  clerkId=${clerkId.slice(-6)} name="${displayName}" teamGroupId=${teamGroupId ?? "null"}`);
   await db
     .insert(raidQueue)
     .values({ clerkId, displayName, teamGroupId, joinedAt: now, expiresAt, matchId: null })
@@ -31,6 +32,12 @@ export async function enqueueForRaid(clerkId, displayName, teamGroupId = null) {
 export async function cancelRaidQueue(clerkId) {
   // Guard: only delete if not already claimed in a match — prevents erasing a live match assignment
   await db.delete(raidQueue).where(and(eq(raidQueue.clerkId, clerkId), isNull(raidQueue.matchId)));
+}
+
+// Nulls a stale matchId so the player can be found by opponent searches again.
+// Only called when getRaidMatchForUser already confirmed no active match exists.
+export async function clearStaleQueueMatchId(clerkId) {
+  await db.update(raidQueue).set({ matchId: null }).where(eq(raidQueue.clerkId, clerkId));
 }
 
 export async function getRaidQueueEntry(clerkId) {
@@ -77,6 +84,22 @@ export async function tryMatchRaid(myClerkId, myDisplayName, teamGroupId = null)
   const presenceThreshold = new Date(Date.now() - PRESENCE_WINDOW_MS);
   const now = new Date();
 
+  console.log(`[MATCH] tryMatch caller=${myClerkId.slice(-6)} name="${myDisplayName}" teamGroupId=${teamGroupId ?? "null"} presenceWindow=${PRESENCE_WINDOW_MS}ms`);
+
+  // Dump the full queue for visibility
+  const fullQueue = await db
+    .select({ clerkId: raidQueue.clerkId, displayName: raidQueue.displayName, teamGroupId: raidQueue.teamGroupId, matchId: raidQueue.matchId, expiresAt: raidQueue.expiresAt })
+    .from(raidQueue);
+  console.log(`[MATCH] queue snapshot (${fullQueue.length} rows):`, fullQueue.map((r) => ({
+    id: r.clerkId.slice(-6), name: r.displayName, tgId: r.teamGroupId?.slice(-6) ?? "null", matchId: r.matchId, expired: r.expiresAt < now,
+  })));
+
+  // Dump presence table
+  const allPresence = await db.select({ clerkId: userPresence.clerkId, lastSeenAt: userPresence.lastSeenAt }).from(userPresence);
+  console.log(`[MATCH] presence snapshot (${allPresence.length} rows):`, allPresence.map((p) => ({
+    id: p.clerkId.slice(-6), lastSeen: p.lastSeenAt, fresh: p.lastSeenAt >= presenceThreshold,
+  })));
+
   if (teamGroupId) {
     // Pre-formed team: find the partner who queued with the same teamGroupId
     const [partner] = await db
@@ -90,7 +113,8 @@ export async function tryMatchRaid(myClerkId, myDisplayName, teamGroupId = null)
       ))
       .limit(1);
 
-    if (!partner) return null; // Partner hasn't queued yet
+    console.log(`[MATCH] [team] partner search for teamGroupId=${teamGroupId.slice(-6)}:`, partner ? `found ${partner.clerkId.slice(-6)} "${partner.displayName}"` : "NOT FOUND");
+    if (!partner) return null;
 
     // Find 2 random opponents
     const opponents = await db
@@ -107,8 +131,10 @@ export async function tryMatchRaid(myClerkId, myDisplayName, teamGroupId = null)
       .orderBy(asc(raidQueue.joinedAt))
       .limit(2);
 
+    console.log(`[MATCH] [team] opponent search: found ${opponents.length}/2`, opponents.map((o) => `${o.clerkId.slice(-6)} "${o.displayName}"`));
     if (opponents.length < 2) return null;
 
+    console.log(`[MATCH] [team] creating match: team0=[${myClerkId.slice(-6)},${partner.clerkId.slice(-6)}] team1=[${opponents[0].clerkId.slice(-6)},${opponents[1].clerkId.slice(-6)}]`);
     return createMatch([
       { clerkId: myClerkId,          displayName: myDisplayName,           teamId: 0 },
       { clerkId: partner.clerkId,    displayName: partner.displayName,     teamId: 0 },
@@ -132,8 +158,10 @@ export async function tryMatchRaid(myClerkId, myDisplayName, teamGroupId = null)
     .orderBy(asc(raidQueue.joinedAt))
     .limit(needed);
 
+  console.log(`[MATCH] [random] found ${others.length}/${needed} others:`, others.map((o) => `${o.clerkId.slice(-6)} "${o.displayName}"`));
   if (others.length < needed) return null;
 
+  console.log(`[MATCH] [random] creating match: team0=[${myClerkId.slice(-6)},${others[0].clerkId.slice(-6)}] team1=[${others[1].clerkId.slice(-6)},${others[2].clerkId.slice(-6)}]`);
   return createMatch([
     { clerkId: myClerkId,         displayName: myDisplayName,           teamId: 0 },
     { clerkId: others[0].clerkId, displayName: others[0].displayName,   teamId: 0 },
@@ -145,13 +173,21 @@ export async function tryMatchRaid(myClerkId, myDisplayName, teamGroupId = null)
 // ── Match lookup (for queue polling / reconnect) ───────────────
 
 export async function getRaidMatchForUser(clerkId) {
-  const entry = await getRaidQueueEntry(clerkId);
-  if (!entry?.matchId) return null;
+  // Query raidMatchPlayers directly — the queue's matchId can be stale (dead match ref
+  // preserved by COALESCE even after that match completed/was abandoned).
+  const [playerRow] = await db
+    .select({ matchId: raidMatchPlayers.matchId })
+    .from(raidMatchPlayers)
+    .where(eq(raidMatchPlayers.clerkId, clerkId))
+    .orderBy(desc(raidMatchPlayers.matchId))
+    .limit(1);
+
+  if (!playerRow) return null;
 
   const [match] = await db
     .select()
     .from(raidMatches)
-    .where(and(eq(raidMatches.id, entry.matchId), eq(raidMatches.status, "active")))
+    .where(and(eq(raidMatches.id, playerRow.matchId), eq(raidMatches.status, "active")))
     .limit(1);
 
   if (!match) return null;
