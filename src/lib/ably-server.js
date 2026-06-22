@@ -24,6 +24,15 @@ export function getRaidChannelName(matchId) {
   return `${prefix}:raid:${matchId}`;
 }
 
+export function getTeamCodeChannelName(matchId, teamId) {
+  const prefix = process.env.ABLY_CHANNEL_PREFIX || "debug-battle";
+  return `${prefix}:raid:${matchId}:team:${teamId}:code`;
+}
+
+export function getAblyRestClient() {
+  return getRestClient();
+}
+
 // REST channel — for publishing only (no WebSocket overhead)
 export function getAblyChannel(matchId) {
   const name = getRaidChannelName(matchId);

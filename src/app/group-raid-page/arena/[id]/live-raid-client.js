@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Ably from "ably";
 import AceEditor from "react-ace";
 import "ace-builds/src-noconflict/mode-c_cpp";
 import "ace-builds/src-noconflict/theme-monokai";
@@ -346,6 +347,9 @@ export default function LiveRaidClient({
   const pollRef          = useRef(null);
   const timerRef         = useRef(null);
   const latestUpdatedAt  = useRef(null);
+  const ablyRef          = useRef(null);
+  const codePublishTimer = useRef(null);
+  const lastLocalEditRef = useRef({});
 
   const matchEnded   = matchStatus === "completed" || matchStatus === "abandoned";
   const selectedFile = files.find((f) => f.Path === selectedPath) ?? null;
@@ -471,6 +475,39 @@ export default function LiveRaidClient({
     };
   }, [matchId, matchEnded]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Team code sync via Ably ───────────────────────────────────
+  useEffect(() => {
+    if (matchEnded) return;
+
+    const prefix = process.env.NEXT_PUBLIC_ABLY_CHANNEL_PREFIX || "debug-battle";
+    const channelName = `${prefix}:raid:${matchId}:team:${myTeamId}:code`;
+
+    const ably = new Ably.Realtime({
+      authUrl:  `/api/ably/token?matchId=${matchId}&teamId=${myTeamId}`,
+      clientId: myClerkId,
+    });
+    ablyRef.current = ably;
+
+    const channel = ably.channels.get(channelName);
+
+    channel.subscribe("code-update", (msg) => {
+      const { filePath, content, fromClerkId } = msg.data ?? {};
+      if (!filePath || content == null || fromClerkId === myClerkId) return;
+
+      const lastEdit = lastLocalEditRef.current[filePath] ?? 0;
+      if (Date.now() - lastEdit < 1000) return; // user is actively typing here — skip
+
+      setEditedCodes((prev) => ({ ...prev, [filePath]: content }));
+    });
+
+    return () => {
+      clearTimeout(codePublishTimer.current);
+      channel.unsubscribe();
+      ably.close();
+      ablyRef.current = null;
+    };
+  }, [matchId, myTeamId, myClerkId, matchEnded]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Auto-end when timer hits 0 ────────────────────────────────
   useEffect(() => {
     if (timeLeft === 0 && !matchEnded) {
@@ -497,6 +534,25 @@ export default function LiveRaidClient({
   function handleCodeChange(code) {
     setEditedCodes((prev) => ({ ...prev, [selectedPath]: code }));
     setLastCheck(null);
+
+    // Track that we edited this file right now (prevents applying teammate's
+    // stale broadcast back over our own live typing)
+    lastLocalEditRef.current[selectedPath] = Date.now();
+
+    // Debounce: publish to teammate after 400ms of silence
+    clearTimeout(codePublishTimer.current);
+    codePublishTimer.current = setTimeout(() => {
+      const ably = ablyRef.current;
+      if (!ably || !selectedPath) return;
+      const prefix = process.env.NEXT_PUBLIC_ABLY_CHANNEL_PREFIX || "debug-battle";
+      const channelName = `${prefix}:raid:${matchId}:team:${myTeamId}:code`;
+      ably.channels.get(channelName).publish("code-update", {
+        filePath:    selectedPath,
+        content:     code,
+        fromClerkId: myClerkId,
+        editedAt:    new Date().toISOString(),
+      }).catch(() => {});
+    }, 400);
   }
 
   async function handleCheck(catKey) {
