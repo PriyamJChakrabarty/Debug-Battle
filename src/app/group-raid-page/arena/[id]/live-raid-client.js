@@ -290,7 +290,7 @@ function Scoreboard({ teams, myTeamId, teamSideId, timeLeft, matchStatus, winner
 
       {teamName && (
         <div style={{ marginTop: "8px", fontSize: "10px", color: "#4a6570", lineHeight: 1.5 }}>
-          Team raid tracked: Social team W/L and Past Raids sync automatically once this match is finalized.
+          Team raid tracked: this final result adds exactly +1 team win/loss in Social, while each participant also gets their own personal raid result.
         </div>
       )}
     </div>
@@ -513,7 +513,7 @@ export default function LiveRaidClient({
 
         {teamName && (
           <p style={{ margin: "-8px 0 0", fontSize: "12px", color: "#8ba0a6", textAlign: "center" }}>
-            This team raid updates {teamName} in Social with the final team record and Past Raids entry.
+            This team raid updates {teamName} in Social with exactly +1 team win/loss and a new Past Raids entry.
           </p>
         )}
 

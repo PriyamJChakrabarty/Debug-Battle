@@ -319,6 +319,9 @@ function PastRaids({ teamId }) {
                 {raid.myScore} <span style={{ color: C.muted, fontWeight: 400 }}>pts</span>
               </div>
               <div style={{ fontSize: 11, color: C.muted }}>vs {raid.oppScore}</div>
+              <div style={{ fontSize: 10, color: r.color, fontWeight: 700, marginTop: 3 }}>
+                Team record: +1 {raid.result === "win" ? "win" : raid.result === "loss" ? "loss" : "draw"}
+              </div>
             </div>
           </div>
         );
