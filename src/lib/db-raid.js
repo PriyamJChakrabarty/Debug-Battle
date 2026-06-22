@@ -3,12 +3,13 @@ import { db } from "./db";
 import { raidMatches, raidMatchPlayers, raidQueue, userPresence } from "./schema";
 import { updateBestScore } from "./db-users";
 import { resolveTeamRaidResult } from "./db-teams";
+import { publishRaidMatchUpdated } from "./raid-realtime";
 
 // ── Constants ── change RAID_MATCH_DURATION_MS to adjust match length ──
 const QUEUE_TTL_MS           = 60_000;
 const PRESENCE_WINDOW_MS     = 20_000;
 const REQUIRED_PLAYERS       = 4;           // 2 per team
-const RAID_MATCH_DURATION_MS = 90_000;      // 30 seconds
+const RAID_MATCH_DURATION_MS = 6000_000;      // 30 seconds
 const DEFAULT_CODEBASE       = "AstroStructure";
 
 // ── Queue ──────────────────────────────────────────────────────
@@ -234,6 +235,7 @@ export async function getRaidMatchState(matchId, myClerkId) {
     status:         match.status,
     codebaseFolder: match.codebaseFolder,
     endsAt:         match.endsAt?.toISOString?.() ?? null,
+    updatedAt:      match.updatedAt?.toISOString?.() ?? null,
     winnerTeam:     match.winnerTeam ?? null,
     teams,
     me: {
@@ -250,10 +252,17 @@ export async function getRaidMatchState(matchId, myClerkId) {
 // ── Progress update ────────────────────────────────────────────
 
 export async function updateRaidPlayerProgress(matchId, clerkId, fileProgress, totalScore) {
+  console.log(`✋ [db-raid.js] updateRaidPlayerProgress matchId=${matchId} clerkId=${clerkId.slice(-6)} score=${totalScore}`);
+  const now = new Date();
   await db
     .update(raidMatchPlayers)
-    .set({ fileProgress: JSON.stringify(fileProgress), totalScore, updatedAt: new Date() })
+    .set({ fileProgress: JSON.stringify(fileProgress), totalScore, updatedAt: now })
     .where(and(eq(raidMatchPlayers.matchId, matchId), eq(raidMatchPlayers.clerkId, clerkId)));
+  await db
+    .update(raidMatches)
+    .set({ updatedAt: now })
+    .where(eq(raidMatches.id, matchId));
+  console.log(`✋ [db-raid.js] raidMatches.updatedAt bumped to ${now.toISOString()} matchId=${matchId}`);
 }
 
 function getRaidWinnerTeam(players) {
@@ -289,6 +298,10 @@ export async function finalizeRaidMatch(matchId, players = null) {
 
   await resolveTeamRaidResult(matchId, matchPlayers, winnerTeam).catch((err) => {
     console.error("[finalizeRaidMatch] resolveTeamRaidResult failed:", err?.message ?? err);
+  });
+
+  await publishRaidMatchUpdated(matchId, "finalized").catch((err) => {
+    console.error("[finalizeRaidMatch] publishRaidMatchUpdated failed:", err?.message ?? err);
   });
 
   return { winnerTeam, players: matchPlayers };

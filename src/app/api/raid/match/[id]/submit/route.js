@@ -4,7 +4,8 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { raidMatchPlayers, raidMatches } from "@/lib/schema";
 import { getRequestAuth } from "@/lib/clerk-guard";
-import { finalizeRaidMatch, updateRaidPlayerProgress } from "@/lib/db-raid";
+import { finalizeRaidMatch, getRaidMatchState, updateRaidPlayerProgress } from "@/lib/db-raid";
+import { publishRaidMatchUpdated } from "@/lib/raid-realtime";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,7 @@ function extractLines(code, start, end) {
 }
 
 export async function POST(request, { params }) {
+  console.log("✋ [submit/route.js] POST hit");
   const session = await getRequestAuth();
   if (session.clerkEnabled && !session.isAuthenticated) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -159,16 +161,27 @@ Required remediation: ${vuln["Correct Code"]}`;
   const newTotalScore = player.totalScore + addedScore;
   await updateRaidPlayerProgress(matchId, session.userId, fileProgress, newTotalScore);
 
+  let finalized = false;
   if (match.status === "completed" || (endsAtMs !== null && nowMs >= endsAtMs)) {
     await finalizeRaidMatch(matchId).catch((err) => {
       console.error("[raid/submit] finalizeRaidMatch failed:", err?.message ?? err);
     });
+    finalized = true;
   }
+
+  if (!finalized) {
+    await publishRaidMatchUpdated(matchId, "score").catch((err) => {
+      console.error("[raid/submit] publishRaidMatchUpdated failed:", err?.message ?? err);
+    });
+  }
+
+  const snapshot = await getRaidMatchState(matchId, session.userId).catch(() => null);
 
   return Response.json({
     fixed:        newFixed,
     allFixed:     merged,
     newScore:     newTotalScore,
     fileProgress,
+    snapshot,
   });
 }

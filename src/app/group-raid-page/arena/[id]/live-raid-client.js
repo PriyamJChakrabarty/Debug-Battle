@@ -341,8 +341,9 @@ export default function LiveRaidClient({
   const [checking,       setChecking]       = useState(false);
   const [lastCheck,      setLastCheck]      = useState(null);
 
-  const pollRef  = useRef(null);
-  const timerRef = useRef(null);
+  const pollRef          = useRef(null);
+  const timerRef         = useRef(null);
+  const latestUpdatedAt  = useRef(null);
 
   const matchEnded   = matchStatus === "completed" || matchStatus === "abandoned";
   const selectedFile = files.find((f) => f.Path === selectedPath) ?? null;
@@ -377,7 +378,17 @@ export default function LiveRaidClient({
   );
 
   function applyMatchSnapshot(snapshot) {
-    if (!snapshot) return;
+    if (!snapshot) { console.log("[RAID] applyMatchSnapshot: null snapshot, skipping"); return; }
+
+    // Revision guard: skip stale snapshots
+    if (snapshot.updatedAt && latestUpdatedAt.current) {
+      if (snapshot.updatedAt <= latestUpdatedAt.current) {
+        console.log(`[RAID] applyMatchSnapshot: STALE skipping updatedAt=${snapshot.updatedAt} latest=${latestUpdatedAt.current}`);
+        return;
+      }
+    }
+    console.log(`[RAID] applyMatchSnapshot: applying updatedAt=${snapshot.updatedAt} teams=${JSON.stringify(snapshot.teams?.map(t => ({ id: t.teamId, score: t.totalScore })))}`);
+    if (snapshot.updatedAt) latestUpdatedAt.current = snapshot.updatedAt;
 
     if (snapshot.teams) setTeams(snapshot.teams);
 
@@ -414,7 +425,7 @@ export default function LiveRaidClient({
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
 
-  // ── Poll match state every 2s ─────────────────────────────────
+  // ── Poll match state every 10s (SSE fallback) ────────────────
   useEffect(() => {
     if (matchEnded) return;
     const poll = async () => {
@@ -423,9 +434,40 @@ export default function LiveRaidClient({
       } catch {}
     };
     poll();
-    pollRef.current = setInterval(poll, 1000);
+    pollRef.current = setInterval(poll, 10000);
     return () => clearInterval(pollRef.current);
   }, [matchEnded]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── SSE live updates via Ably-backed event stream ─────────────
+  useEffect(() => {
+    if (matchEnded) return;
+
+    console.log(`[RAID] opening EventSource /api/raid/match/${matchId}/events`);
+    const es = new EventSource(`/api/raid/match/${matchId}/events`);
+
+    es.onopen = () => {
+      console.log(`[RAID] EventSource connected matchId=${matchId}`);
+    };
+
+    es.addEventListener("snapshot", (event) => {
+      console.log(`[RAID] SSE snapshot received raw:`, event.data?.slice(0, 120));
+      try {
+        const snapshot = JSON.parse(event.data);
+        applyMatchSnapshot(snapshot);
+      } catch (err) {
+        console.error("[RAID] SSE snapshot parse error:", err);
+      }
+    });
+
+    es.onerror = (err) => {
+      console.warn(`[RAID] EventSource error matchId=${matchId} readyState=${es.readyState}`, err);
+    };
+
+    return () => {
+      console.log(`[RAID] closing EventSource matchId=${matchId}`);
+      es.close();
+    };
+  }, [matchId, matchEnded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auto-end when timer hits 0 ────────────────────────────────
   useEffect(() => {
@@ -489,12 +531,16 @@ export default function LiveRaidClient({
       })();
       const nextScore = data.newScore ?? myTotalScore + added;
 
-      // Optimistic local update
+      // Optimistic local update, then apply canonical snapshot from response
       setProgress(nextProgress);
       setMyTotalScore(nextScore);
       setTeams((currentTeams) => mergePlayerScoreIntoTeams(currentTeams, myTeamId, myClerkId, nextScore));
       setLastCheck({ category: catKey, added, newlyFixed, allFixed });
-      await syncMatchState().catch(() => {});
+      if (data.snapshot) {
+        applyMatchSnapshot(data.snapshot);
+      } else {
+        await syncMatchState().catch(() => {});
+      }
     } catch (err) {
       setLastCheck({ category: catKey, error: err.message });
     } finally {
