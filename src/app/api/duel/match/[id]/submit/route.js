@@ -2,7 +2,8 @@ import { getRequestAuth } from "@/lib/clerk-guard";
 import { eq, and } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { duelMatchPlayers, duelMatches } from "@/lib/schema";
-import { updatePlayerProgress } from "@/lib/db-duel";
+import { updatePlayerProgress, getMatchState } from "@/lib/db-duel";
+import { publishDuelMatchUpdated } from "@/lib/duel-realtime";
 
 export const dynamic = "force-dynamic";
 
@@ -137,5 +138,11 @@ Required remediation: ${vuln["Correct Code"]}`;
 
   await updatePlayerProgress(matchId, session.userId, { score: updatedScore, fixedCounts: currentFixed });
 
-  return Response.json({ fixed: newFixed, score: updatedScore, categoryFixed: merged });
+  await publishDuelMatchUpdated(matchId, "score").catch((err) => {
+    console.error("[duel/submit] publishDuelMatchUpdated failed:", err?.message ?? err);
+  });
+
+  const snapshot = await getMatchState(matchId, session.userId).catch(() => null);
+
+  return Response.json({ fixed: newFixed, score: updatedScore, categoryFixed: merged, snapshot });
 }

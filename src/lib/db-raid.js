@@ -4,6 +4,7 @@ import { raidMatches, raidMatchPlayers, raidQueue, userPresence } from "./schema
 import { updateBestScore } from "./db-users";
 import { resolveTeamRaidResult } from "./db-teams";
 import { publishRaidMatchUpdated } from "./raid-realtime";
+import { getAblyPlayerChannel } from "./ably-server";
 
 // ── Constants ── change RAID_MATCH_DURATION_MS to adjust match length ──
 const QUEUE_TTL_MS           = 60_000;
@@ -79,7 +80,37 @@ async function createMatch(playerQuad) {
     playerQuad.map((p) => ({ matchId: match.id, clerkId: p.clerkId, displayName: p.displayName, teamId: p.teamId }))
   );
 
-  return { matchId: match.id, endsAt: match.endsAt?.toISOString?.() ?? null };
+  // Abandon any older active matches these players were previously in so
+  // getRaidMatchForUser always finds this new match instead of a stale one.
+  const allClerkIds = playerQuad.map((p) => p.clerkId);
+  const oldMatches = await db
+    .select({ matchId: raidMatchPlayers.matchId })
+    .from(raidMatchPlayers)
+    .where(and(inArray(raidMatchPlayers.clerkId, allClerkIds), ne(raidMatchPlayers.matchId, match.id)));
+  const oldMatchIds = [...new Set(oldMatches.map((r) => r.matchId))];
+  if (oldMatchIds.length > 0) {
+    await db
+      .update(raidMatches)
+      .set({ status: "abandoned", updatedAt: now })
+      .where(and(inArray(raidMatches.id, oldMatchIds), eq(raidMatches.status, "active")))
+      .catch(() => {});
+    console.log(`[createMatch] abandoned stale matches ${oldMatchIds.join(",")} for new match ${match.id}`);
+  }
+
+  const result = { matchId: match.id, endsAt: match.endsAt?.toISOString?.() ?? null };
+
+  // Push match notification to every player's personal channel so the matchmaking
+  // page can redirect instantly via SSE instead of waiting for the next 2s poll.
+  await Promise.allSettled(
+    playerQuad.map((p) =>
+      getAblyPlayerChannel(p.clerkId).publish("matched", result).catch((err) => {
+        console.error(`[createMatch] Ably push failed for ${p.clerkId.slice(-6)}:`, err?.message ?? err);
+      })
+    )
+  );
+  console.log(`[createMatch] pushed match-found to ${playerQuad.length} players for match ${match.id}`);
+
+  return result;
 }
 
 export async function tryMatchRaid(myClerkId, myDisplayName, teamGroupId = null) {

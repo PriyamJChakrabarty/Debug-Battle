@@ -75,8 +75,10 @@ export default function MatchmakingClient({ myClerkId, myName }) {
   const [onlineCount, setOnline]  = useState(null);
   const [dotFrame, setDotFrame]   = useState(0);
 
-  const pollRef = useRef(null);
-  const cdRef   = useRef(null);
+  const pollRef    = useRef(null);
+  const cdRef      = useRef(null);
+  const sseRef     = useRef(null);
+  const matchedRef = useRef(false); // prevent double-redirect if SSE + fallback poll race
 
   // ── On mount: always cancel stale queue entry and start fresh ─
   useEffect(() => {
@@ -84,26 +86,58 @@ export default function MatchmakingClient({ myClerkId, myName }) {
     setPhase("searching");
   }, []);
 
-  // ── Poll queue every 2s while searching ───────────────────
+  // ── Enqueue + SSE push + 10s fallback poll ────────────────
   useEffect(() => {
     if (phase !== "searching") return;
+    matchedRef.current = false;
 
-    const poll = async () => {
+    function handleMatch(data) {
+      if (matchedRef.current) return;
+      matchedRef.current = true;
+      clearInterval(pollRef.current);
+      if (sseRef.current) { sseRef.current.close(); sseRef.current = null; }
+      setMatchData(data);
+      setPhase("matched");
+    }
+
+    // 1. Enqueue immediately (and catch an instant match)
+    const enqueue = async () => {
       try {
         const r = await fetch("/api/duel/queue", { method: "POST" });
         if (!r.ok) return;
         const data = await r.json();
-        if (data.matched) {
-          clearInterval(pollRef.current);
-          setMatchData(data);
-          setPhase("matched");
-        }
+        if (data.matched) handleMatch(data);
       } catch {}
     };
 
-    poll();
-    pollRef.current = setInterval(poll, 2000);
-    return () => clearInterval(pollRef.current);
+    enqueue();
+
+    // 2. SSE push — server notifies us the instant a match is created
+    const sse = new EventSource("/api/duel/queue/events");
+    sseRef.current = sse;
+    sse.addEventListener("matched", (e) => {
+      try { handleMatch(JSON.parse(e.data)); } catch {}
+    });
+    sse.onerror = () => {
+      sse.close();
+      sseRef.current = null;
+    };
+
+    // 3. 10s fallback poll — insurance against SSE delivery gaps
+    pollRef.current = setInterval(async () => {
+      if (matchedRef.current) return;
+      try {
+        const r = await fetch("/api/duel/queue", { method: "POST" });
+        if (!r.ok) return;
+        const data = await r.json();
+        if (data.matched) handleMatch(data);
+      } catch {}
+    }, 10000);
+
+    return () => {
+      clearInterval(pollRef.current);
+      if (sseRef.current) { sseRef.current.close(); sseRef.current = null; }
+    };
   }, [phase]);
 
   // ── Fetch online count for searching screen ────────────────
@@ -151,6 +185,7 @@ export default function MatchmakingClient({ myClerkId, myName }) {
   // ── Cancel ────────────────────────────────────────────────
   async function handleCancel() {
     clearInterval(pollRef.current);
+    if (sseRef.current) { sseRef.current.close(); sseRef.current = null; }
     try { await fetch("/api/duel/queue/cancel", { method: "DELETE" }); } catch {}
     window.location.href = "/home";
   }

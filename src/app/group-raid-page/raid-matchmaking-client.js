@@ -108,18 +108,31 @@ export default function RaidMatchmakingClient({ myName, myClerkId, teamGroupId =
   const [onlineCount, setOnline]    = useState(null);
   const [dotFrame,   setDotFrame]   = useState(0);
 
-  const pollRef = useRef(null);
-  const cdRef   = useRef(null);
+  const pollRef  = useRef(null);
+  const cdRef    = useRef(null);
+  const sseRef   = useRef(null);
+  const matchedRef = useRef(false); // prevent double-redirect from SSE + fallback poll racing
 
   useEffect(() => {
     fetch("/api/raid/queue/cancel", { method: "DELETE" }).catch(() => {});
   }, []);
 
-  // Poll queue every 2s
+  // ── Enqueue + SSE push + 10s fallback poll ──────────────────
   useEffect(() => {
     if (phase !== "searching") return;
+    matchedRef.current = false;
 
-    const poll = async () => {
+    function handleMatch(data) {
+      if (matchedRef.current) return;
+      matchedRef.current = true;
+      clearInterval(pollRef.current);
+      if (sseRef.current) { sseRef.current.close(); sseRef.current = null; }
+      setMatchData(data);
+      setPhase("matched");
+    }
+
+    // 1. Enqueue immediately (and check for instant match)
+    const enqueue = async () => {
       try {
         const r = await fetch("/api/raid/queue", {
           method: "POST",
@@ -130,20 +143,53 @@ export default function RaidMatchmakingClient({ myName, myClerkId, teamGroupId =
         const data = await r.json();
         if (data.teamCancelled) {
           clearInterval(pollRef.current);
+          if (sseRef.current) { sseRef.current.close(); sseRef.current = null; }
           window.location.href = "/home";
           return;
         }
-        if (data.matched) {
-          clearInterval(pollRef.current);
-          setMatchData(data);
-          setPhase("matched");
-        }
+        if (data.matched) handleMatch(data);
       } catch {}
     };
 
-    poll();
-    pollRef.current = setInterval(poll, 2000);
-    return () => clearInterval(pollRef.current);
+    enqueue();
+
+    // 2. SSE push — server notifies us the instant a match is created
+    const sse = new EventSource("/api/raid/queue/events");
+    sseRef.current = sse;
+    sse.addEventListener("matched", (e) => {
+      try { handleMatch(JSON.parse(e.data)); } catch {}
+    });
+    sse.onerror = () => {
+      // SSE dropped — fallback poll will cover it
+      sse.close();
+      sseRef.current = null;
+    };
+
+    // 3. 10s fallback poll — catches rare SSE delivery gaps
+    pollRef.current = setInterval(async () => {
+      if (matchedRef.current) return;
+      try {
+        const r = await fetch("/api/raid/queue", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ teamGroupId }),
+        });
+        if (!r.ok) return;
+        const data = await r.json();
+        if (data.teamCancelled) {
+          clearInterval(pollRef.current);
+          if (sseRef.current) { sseRef.current.close(); sseRef.current = null; }
+          window.location.href = "/home";
+          return;
+        }
+        if (data.matched) handleMatch(data);
+      } catch {}
+    }, 10000);
+
+    return () => {
+      clearInterval(pollRef.current);
+      if (sseRef.current) { sseRef.current.close(); sseRef.current = null; }
+    };
   }, [phase]);
 
   // Online count
@@ -184,6 +230,7 @@ export default function RaidMatchmakingClient({ myName, myClerkId, teamGroupId =
 
   async function handleCancel() {
     clearInterval(pollRef.current);
+    if (sseRef.current) { sseRef.current.close(); sseRef.current = null; }
     try { await fetch("/api/raid/queue/cancel", { method: "DELETE" }); } catch {}
     window.location.href = "/home";
   }

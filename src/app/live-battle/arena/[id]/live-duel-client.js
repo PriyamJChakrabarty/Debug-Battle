@@ -53,19 +53,46 @@ export default function LiveDuelClient({
   const [timeLeft,       setTimeLeft]       = useState(null);
 
   // ── UI state ───────────────────────────────────────────────
-  const [checking,   setChecking]   = useState(false);
-  const [advancing,  setAdvancing]  = useState(false);
-  const [result,     setResult]     = useState(null);
-  const [openHints,  setOpenHints]  = useState(new Set());
+  const [checking,        setChecking]        = useState(false);
+  const [advancing,       setAdvancing]       = useState(false);
+  const [result,          setResult]          = useState(null);
+  const [openHints,       setOpenHints]       = useState(new Set());
+  const [surrenderConfirm, setSurrenderConfirm] = useState(false);
+  const [surrendering,    setSurrendering]    = useState(false);
 
-  const pollRef  = useRef(null);
-  const timerRef = useRef(null);
+  const pollRef         = useRef(null);
+  const timerRef        = useRef(null);
+  const latestUpdatedAt = useRef(null);
 
   const cat        = CATEGORIES[catIdx] ?? CATEGORIES[0];
   const vulns      = vulnerabilities[cat.key] ?? [];
   const fixedNow   = catFixed[catIdx] ?? [];
   const isLastCat  = catIdx >= CATEGORIES.length - 1;
   const matchEnded = matchStatus === "completed" || matchStatus === "abandoned";
+
+  // ── Canonical snapshot apply ───────────────────────────────
+  function applyMatchSnapshot(snapshot) {
+    if (!snapshot) return;
+
+    if (snapshot.updatedAt && latestUpdatedAt.current) {
+      if (snapshot.updatedAt <= latestUpdatedAt.current) return;
+    }
+    if (snapshot.updatedAt) latestUpdatedAt.current = snapshot.updatedAt;
+
+    if (snapshot.opponent) setOpponent(snapshot.opponent);
+
+    if (snapshot.me) {
+      setMyScore(snapshot.me.score);
+      setSelfDone((prev) => prev || snapshot.me.status === "finished");
+    }
+
+    if (snapshot.status && snapshot.status !== "active") {
+      setMatchStatus(snapshot.status);
+      setWinnerClerkId(snapshot.winnerClerkId ?? null);
+      clearInterval(pollRef.current);
+      clearInterval(timerRef.current);
+    }
+  }
 
   // ── Timer ──────────────────────────────────────────────────
   useEffect(() => {
@@ -81,7 +108,7 @@ export default function LiveDuelClient({
     return () => clearInterval(timerRef.current);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Poll opponent + match status every 2s ─────────────────
+  // ── Poll every 10s (SSE fallback) ─────────────────────────
   useEffect(() => {
     if (matchEnded) return;
 
@@ -89,38 +116,40 @@ export default function LiveDuelClient({
       try {
         const r = await fetch(`/api/duel/match/${matchId}`);
         if (!r.ok) return;
-        const d = await r.json();
-        if (d.opponent) setOpponent(d.opponent);
-        if (d.status && d.status !== "active") {
-          setMatchStatus(d.status);
-          setWinnerClerkId(d.winnerClerkId ?? null);
-          clearInterval(pollRef.current);
-          clearInterval(timerRef.current);
-        }
-        // Sync my score/index if server disagrees (e.g. after reconnect)
-        if (d.me) {
-          setMyScore(d.me.score);
-          if (!selfDone && d.me.status === "finished") setSelfDone(true);
-        }
+        applyMatchSnapshot(await r.json());
       } catch {}
     };
 
     poll();
-    pollRef.current = setInterval(poll, 2000);
+    pollRef.current = setInterval(poll, 10000);
     return () => clearInterval(pollRef.current);
   }, [matchEnded]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── SSE live updates ───────────────────────────────────────
+  useEffect(() => {
+    if (matchEnded) return;
+
+    const es = new EventSource(`/api/duel/match/${matchId}/events`);
+    es.addEventListener("snapshot", (event) => {
+      try { applyMatchSnapshot(JSON.parse(event.data)); } catch {}
+    });
+    es.onerror = () => {};
+
+    return () => es.close();
+  }, [matchId, matchEnded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auto-end when timer hits 0 ─────────────────────────────
   useEffect(() => {
     if (timeLeft === 0 && !matchEnded) {
-      setMatchStatus("completed");
       clearInterval(pollRef.current);
       clearInterval(timerRef.current);
-      // Fetch final result once
-      fetch(`/api/duel/match/${matchId}`).then(r => r.json()).then(d => {
-        setWinnerClerkId(d.winnerClerkId ?? null);
-        if (d.opponent) setOpponent(d.opponent);
-      }).catch(() => {});
+      fetch(`/api/duel/match/${matchId}`)
+        .then((r) => r.json())
+        .then((d) => {
+          applyMatchSnapshot(d);
+          if (!d.status || d.status === "active") setMatchStatus("completed");
+        })
+        .catch(() => setMatchStatus("completed"));
     }
   }, [timeLeft]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -151,6 +180,9 @@ export default function LiveDuelClient({
       });
       setMyScore(payload.score);
       setResult({ newCount, totalFixed: merged.length, total: vulns.length });
+
+      // Apply canonical server snapshot (syncs opponent score too)
+      if (payload.snapshot) applyMatchSnapshot(payload.snapshot);
     } catch (err) {
       setResult({ error: err instanceof Error ? err.message : "Check failed." });
     } finally {
@@ -181,6 +213,8 @@ export default function LiveDuelClient({
       } else {
         setCatIdx(payload.categoryIndex);
       }
+
+      if (payload.snapshot) applyMatchSnapshot(payload.snapshot);
     } catch {}
     setAdvancing(false);
   }
@@ -191,6 +225,17 @@ export default function LiveDuelClient({
       next.has(idx) ? next.delete(idx) : next.add(idx);
       return next;
     });
+  }
+
+  // ── Surrender ──────────────────────────────────────────────
+  async function handleSurrender() {
+    if (surrendering) return;
+    setSurrendering(true);
+    try {
+      await fetch(`/api/duel/match/${matchId}/surrender`, { method: "POST" });
+    } catch {}
+    setSurrendering(false);
+    setSurrenderConfirm(false);
   }
 
   // ── Derived ────────────────────────────────────────────────
@@ -327,6 +372,48 @@ export default function LiveDuelClient({
 
         {/* Spacer */}
         <div style={{ flex: 1 }} />
+
+        {/* Surrender */}
+        {!surrenderConfirm ? (
+          <button
+            onClick={() => setSurrenderConfirm(true)}
+            style={{
+              background: "transparent", border: "1px solid rgba(255,92,92,0.3)",
+              color: "#ff5c5c", cursor: "pointer",
+              padding: "3px 12px", borderRadius: "6px",
+              fontSize: "11px", fontWeight: 700,
+            }}
+          >
+            Surrender
+          </button>
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <span style={{ fontSize: "11px", color: "#ff5c5c", fontWeight: 700 }}>Give up?</span>
+            <button
+              onClick={handleSurrender}
+              disabled={surrendering}
+              style={{
+                background: "#ff5c5c", color: "#0d1117", border: "none",
+                padding: "3px 10px", borderRadius: "5px",
+                fontSize: "11px", fontWeight: 800, cursor: surrendering ? "not-allowed" : "pointer",
+                opacity: surrendering ? 0.6 : 1,
+              }}
+            >
+              {surrendering ? "…" : "Yes, lose"}
+            </button>
+            <button
+              onClick={() => setSurrenderConfirm(false)}
+              style={{
+                background: "transparent", border: "1px solid rgba(201,214,218,0.15)",
+                color: "#8ba0a6", cursor: "pointer",
+                padding: "3px 10px", borderRadius: "5px",
+                fontSize: "11px", fontWeight: 600,
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
 
         {/* Timer */}
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>

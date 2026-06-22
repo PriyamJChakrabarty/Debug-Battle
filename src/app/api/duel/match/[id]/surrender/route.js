@@ -1,5 +1,5 @@
 import { getRequestAuth } from "@/lib/clerk-guard";
-import { advanceCategory, getMatchState } from "@/lib/db-duel";
+import { surrenderDuelMatch } from "@/lib/db-duel";
 
 export const dynamic = "force-dynamic";
 
@@ -14,10 +14,10 @@ export async function POST(request, { params }) {
   const matchId = parseInt(id, 10);
   if (isNaN(matchId)) return Response.json({ error: "Invalid match id" }, { status: 400 });
 
-  const result = await advanceCategory(matchId, session.userId);
-  if (!result) return Response.json({ error: "Not in this match." }, { status: 403 });
-
-  const snapshot = await getMatchState(matchId, session.userId).catch(() => null);
-
-  return Response.json({ ...result, snapshot });
+  try {
+    await surrenderDuelMatch(matchId, session.userId);
+    return Response.json({ ok: true });
+  } catch (err) {
+    return Response.json({ error: err.message ?? "Surrender failed" }, { status: 400 });
+  }
 }

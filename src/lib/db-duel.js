@@ -1,8 +1,10 @@
 import { readFileSync } from "fs";
 import { join } from "path";
-import { and, asc, eq, gt, gte, isNull, ne } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, isNull, ne } from "drizzle-orm";
 import { db } from "./db";
 import { duelMatchPlayers, duelMatches, duelQueue, userPresence } from "./schema";
+import { publishDuelMatchUpdated } from "./duel-realtime";
+import { getAblyPlayerChannel } from "./ably-server";
 
 const QUEUE_TTL_MS       = 60_000;
 const MATCH_DURATION_MS  = 10 * 60_000;
@@ -99,7 +101,37 @@ export async function tryMatchPlayer(myClerkId, myDisplayName) {
     { matchId: match.id, clerkId: opponent.clerkId, displayName: opponent.displayName },
   ]);
 
-  return { matchId: match.id, endsAt: match.endsAt, opponentName: opponent.displayName };
+  // Abandon any other active matches these two players were already in — prevents
+  // the stale-match redirect race where both players end up on different matchIds.
+  const bothClerkIds = [myClerkId, opponent.clerkId];
+  const oldPlayerRows = await db
+    .select({ matchId: duelMatchPlayers.matchId })
+    .from(duelMatchPlayers)
+    .where(and(inArray(duelMatchPlayers.clerkId, bothClerkIds), ne(duelMatchPlayers.matchId, match.id)));
+  const oldMatchIds = [...new Set(oldPlayerRows.map((r) => r.matchId))];
+  if (oldMatchIds.length > 0) {
+    await db
+      .update(duelMatches)
+      .set({ status: "abandoned", updatedAt: now })
+      .where(and(inArray(duelMatches.id, oldMatchIds), eq(duelMatches.status, "active")))
+      .catch(() => {});
+    console.log(`[duel/tryMatch] abandoned stale matches ${oldMatchIds.join(",")} for new match ${match.id}`);
+  }
+
+  const result = { matchId: match.id, endsAt: match.endsAt?.toISOString?.() ?? null, opponentName: opponent.displayName };
+
+  // Push match notification so both players' SSE connections redirect instantly
+  await Promise.allSettled([
+    getAblyPlayerChannel(myClerkId).publish("matched", result).catch((err) => {
+      console.error(`[duel/tryMatch] Ably push failed for caller:`, err?.message ?? err);
+    }),
+    getAblyPlayerChannel(opponent.clerkId).publish("matched", { ...result, opponentName: myDisplayName }).catch((err) => {
+      console.error(`[duel/tryMatch] Ably push failed for opponent:`, err?.message ?? err);
+    }),
+  ]);
+  console.log(`[duel/tryMatch] pushed match-found to both players for match ${match.id}`);
+
+  return result;
 }
 
 export async function abandonMatch(matchId) {
@@ -110,13 +142,21 @@ export async function abandonMatch(matchId) {
 // ── Match lookup (for queue/matchmaking polling) ──────────────
 
 export async function getMatchForUser(clerkId) {
-  const queueRow = await getQueueEntry(clerkId);
-  if (!queueRow?.matchId) return null;
+  // Query duelMatchPlayers directly — the queue's matchId is unreliable when two
+  // concurrent tryMatchPlayer calls race and overwrite each other's self-update.
+  const [playerRow] = await db
+    .select({ matchId: duelMatchPlayers.matchId })
+    .from(duelMatchPlayers)
+    .where(eq(duelMatchPlayers.clerkId, clerkId))
+    .orderBy(desc(duelMatchPlayers.matchId))
+    .limit(1);
+
+  if (!playerRow) return null;
 
   const [match] = await db
     .select()
     .from(duelMatches)
-    .where(and(eq(duelMatches.id, queueRow.matchId), eq(duelMatches.status, "active")))
+    .where(and(eq(duelMatches.id, playerRow.matchId), eq(duelMatches.status, "active")))
     .limit(1);
 
   if (!match) return null;
@@ -126,7 +166,7 @@ export async function getMatchForUser(clerkId) {
 
   return {
     matchId:      match.id,
-    endsAt:       match.endsAt,
+    endsAt:       match.endsAt?.toISOString?.() ?? null,
     opponentName: opponent?.displayName ?? "Opponent",
   };
 }
@@ -147,6 +187,7 @@ export async function getMatchState(matchId, myClerkId) {
     matchId:        match.id,
     status:         match.status,
     endsAt:         match.endsAt,
+    updatedAt:      match.updatedAt?.toISOString?.() ?? null,
     winnerClerkId:  match.winnerClerkId ?? null,
     challengeSlot:  match.challengeSlot,
     challengeData:  match.challengeData,
@@ -171,10 +212,16 @@ export async function getMatchState(matchId, myClerkId) {
 // ── Progress update (called by submit route) ──────────────────
 
 export async function updatePlayerProgress(matchId, clerkId, { score, fixedCounts }) {
+  const now = new Date();
   await db
     .update(duelMatchPlayers)
-    .set({ score, fixedCounts: JSON.stringify(fixedCounts), updatedAt: new Date() })
+    .set({ score, fixedCounts: JSON.stringify(fixedCounts), updatedAt: now })
     .where(and(eq(duelMatchPlayers.matchId, matchId), eq(duelMatchPlayers.clerkId, clerkId)));
+  // Bump match-level updatedAt so SSE revision guard accepts the new snapshot
+  await db
+    .update(duelMatches)
+    .set({ updatedAt: now })
+    .where(eq(duelMatches.id, matchId));
 }
 
 // ── Category advance (called by advance route) ────────────────
@@ -209,6 +256,14 @@ export async function advanceCategory(matchId, clerkId) {
         .set({ status: "completed", winnerClerkId, updatedAt: new Date() })
         .where(eq(duelMatches.id, matchId));
       matchCompleted = true;
+      await publishDuelMatchUpdated(matchId, "finalized").catch((err) => {
+        console.error("[advanceCategory] publishDuelMatchUpdated failed:", err?.message ?? err);
+      });
+    } else {
+      // Player finished but opponent hasn't — still notify opponent's SSE
+      await publishDuelMatchUpdated(matchId, "player_finished").catch((err) => {
+        console.error("[advanceCategory] publishDuelMatchUpdated failed:", err?.message ?? err);
+      });
     }
   }
 
@@ -234,7 +289,41 @@ export async function autoCompleteIfExpired(matchId) {
     .set({ status: "completed", winnerClerkId: winner, updatedAt: new Date() })
     .where(eq(duelMatches.id, matchId));
 
+  await publishDuelMatchUpdated(matchId, "finalized").catch((err) => {
+    console.error("[autoCompleteIfExpired] publishDuelMatchUpdated failed:", err?.message ?? err);
+  });
+
   return true;
+}
+
+// ── Surrender ─────────────────────────────────────────────────
+
+export async function surrenderDuelMatch(matchId, clerkId) {
+  const [match] = await db
+    .select()
+    .from(duelMatches)
+    .where(and(eq(duelMatches.id, matchId), eq(duelMatches.status, "active")))
+    .limit(1);
+  if (!match) throw new Error("Match not active");
+
+  const players = await db.select().from(duelMatchPlayers).where(eq(duelMatchPlayers.matchId, matchId));
+  const me = players.find((p) => p.clerkId === clerkId);
+  if (!me) throw new Error("Player not in match");
+
+  const opponent = players.find((p) => p.clerkId !== clerkId);
+  const winnerClerkId = opponent?.clerkId ?? null;
+
+  console.log(`[SURRENDER/duel] matchId=${matchId} surrenderer=${clerkId.slice(-6)} winner=${winnerClerkId?.slice(-6)}`);
+
+  const now = new Date();
+  await db
+    .update(duelMatches)
+    .set({ status: "completed", winnerClerkId, updatedAt: now })
+    .where(eq(duelMatches.id, matchId));
+
+  await publishDuelMatchUpdated(matchId, "surrendered").catch((err) => {
+    console.error("[surrenderDuelMatch] publishDuelMatchUpdated failed:", err?.message ?? err);
+  });
 }
 
 // ── Disconnect check (used during matchmaking polling) ────────

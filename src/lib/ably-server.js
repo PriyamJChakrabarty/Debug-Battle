@@ -29,6 +29,21 @@ export function getTeamCodeChannelName(matchId, teamId) {
   return `${prefix}:raid:${matchId}:team:${teamId}:code`;
 }
 
+export function getDuelChannelName(matchId) {
+  const prefix = process.env.ABLY_CHANNEL_PREFIX || "debug-battle";
+  return `${prefix}:duel:${matchId}`;
+}
+
+// REST channel for duel publishing
+export function getAblyDuelChannel(matchId) {
+  return getRestClient().channels.get(getDuelChannelName(matchId));
+}
+
+// Realtime channel for duel SSE subscribing
+export function getAblyRealtimeDuelChannel(matchId) {
+  return getRealtimeClient().channels.get(getDuelChannelName(matchId));
+}
+
 export function getAblyRestClient() {
   return getRestClient();
 }
@@ -45,4 +60,18 @@ export function getAblyRealtimeChannel(matchId) {
   const name = getRaidChannelName(matchId);
   console.log(`✋ [ably-server.js] getAblyRealtimeChannel (Realtime subscribe) channel="${name}"`);
   return getRealtimeClient().channels.get(name);
+}
+
+// Per-player personal channel for push matchmaking notifications
+export function getPlayerChannelName(clerkId) {
+  const prefix = process.env.ABLY_CHANNEL_PREFIX || "debug-battle";
+  return `${prefix}:player:${clerkId}:match-found`;
+}
+
+export function getAblyPlayerChannel(clerkId) {
+  return getRestClient().channels.get(getPlayerChannelName(clerkId));
+}
+
+export function getAblyRealtimePlayerChannel(clerkId) {
+  return getRealtimeClient().channels.get(getPlayerChannelName(clerkId));
 }
