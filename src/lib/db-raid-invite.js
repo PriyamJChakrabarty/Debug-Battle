@@ -146,6 +146,23 @@ export async function rejectInvite(inviteId, inviteeClerkId) {
     ));
 }
 
+// Mark every invitation in a team session as cancelled — used to broadcast "team cancelled" to all members
+export async function markTeamCancelled(teamGroupId) {
+  await db
+    .update(raidInvitations)
+    .set({ status: "team_cancelled", updatedAt: new Date() })
+    .where(eq(raidInvitations.teamGroupId, teamGroupId));
+}
+
+export async function isTeamCancelled(teamGroupId) {
+  const [row] = await db
+    .select({ id: raidInvitations.id })
+    .from(raidInvitations)
+    .where(and(eq(raidInvitations.teamGroupId, teamGroupId), eq(raidInvitations.status, "team_cancelled")))
+    .limit(1);
+  return !!row;
+}
+
 export async function expireInvitesFromInviter(inviterClerkId) {
   await db
     .update(raidInvitations)

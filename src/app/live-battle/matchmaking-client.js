@@ -152,7 +152,7 @@ export default function MatchmakingClient({ myClerkId, myName }) {
   async function handleCancel() {
     clearInterval(pollRef.current);
     try { await fetch("/api/duel/queue/cancel", { method: "DELETE" }); } catch {}
-    window.location.href = "/";
+    window.location.href = "/home";
   }
 
   const dots = ".".repeat(dotFrame % 4);

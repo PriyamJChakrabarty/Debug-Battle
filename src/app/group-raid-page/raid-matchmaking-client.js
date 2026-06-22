@@ -128,6 +128,11 @@ export default function RaidMatchmakingClient({ myName, myClerkId, teamGroupId =
         });
         if (!r.ok) return;
         const data = await r.json();
+        if (data.teamCancelled) {
+          clearInterval(pollRef.current);
+          window.location.href = "/home";
+          return;
+        }
         if (data.matched) {
           clearInterval(pollRef.current);
           setMatchData(data);
@@ -177,7 +182,7 @@ export default function RaidMatchmakingClient({ myName, myClerkId, teamGroupId =
   async function handleCancel() {
     clearInterval(pollRef.current);
     try { await fetch("/api/raid/queue/cancel", { method: "DELETE" }); } catch {}
-    if (onBack) { onBack(); } else { window.location.href = "/"; }
+    window.location.href = "/home";
   }
 
   const dots = ".".repeat(dotFrame % 4);

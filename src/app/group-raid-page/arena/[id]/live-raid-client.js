@@ -510,7 +510,7 @@ export default function LiveRaidClient({
             Raid Again →
           </button>
           <button
-            onClick={() => { window.location.href = "/"; }}
+            onClick={() => { window.location.href = "/home"; }}
             style={{
               background: "transparent", color: "#8ba0a6",
               border: "1px solid rgba(201,214,218,0.15)",

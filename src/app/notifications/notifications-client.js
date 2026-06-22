@@ -147,7 +147,7 @@ export default function NotificationsClient({ initialNotifications, myClerkId })
     }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "32px" }}>
-        <Link href="/" style={{
+        <Link href="/home" style={{
           color: "#4a6570", textDecoration: "none", fontSize: "13px",
           display: "flex", alignItems: "center", gap: "4px",
           transition: "color 0.15s",

@@ -256,7 +256,7 @@ export default function LiveDuelClient({
             Play Again →
           </button>
           <button
-            onClick={() => { window.location.href = "/"; }}
+            onClick={() => { window.location.href = "/home"; }}
             style={{
               background: "transparent", color: "#8ba0a6",
               border: "1px solid rgba(201,214,218,0.15)",
@@ -290,7 +290,7 @@ export default function LiveDuelClient({
         borderBottom: "1px solid rgba(61,220,132,0.1)",
       }}>
         {/* Logo */}
-        <a href="/" style={{ display: "flex", alignItems: "center", gap: "1px", textDecoration: "none", marginRight: "6px" }}>
+        <a href="/home" style={{ display: "flex", alignItems: "center", gap: "1px", textDecoration: "none", marginRight: "6px" }}>
           <span style={{ fontWeight: 900, fontSize: "14px", color: "#3ddc84", letterSpacing: "-0.02em" }}>Debug</span>
           <span style={{ fontWeight: 900, fontSize: "14px", color: "#e8f0f3", letterSpacing: "-0.02em" }}>Battle</span>
         </a>

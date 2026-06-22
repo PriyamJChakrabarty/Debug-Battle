@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, gte, inArray, isNull, ne } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, isNull, ne, sql } from "drizzle-orm";
 import { db } from "./db";
 import { raidMatches, raidMatchPlayers, raidQueue, userPresence } from "./schema";
 import { updateBestScore } from "./db-users";
@@ -20,12 +20,17 @@ export async function enqueueForRaid(clerkId, displayName, teamGroupId = null) {
     .values({ clerkId, displayName, teamGroupId, joinedAt: now, expiresAt, matchId: null })
     .onConflictDoUpdate({
       target: raidQueue.clerkId,
-      set: { displayName, teamGroupId, joinedAt: now, expiresAt, matchId: null, updatedAt: now },
+      set: {
+        displayName, teamGroupId, joinedAt: now, expiresAt, updatedAt: now,
+        // Preserve matchId if already claimed — prevents a concurrent poll from wiping a match assignment
+        matchId: sql`COALESCE(${raidQueue.matchId}, excluded.match_id)`,
+      },
     });
 }
 
 export async function cancelRaidQueue(clerkId) {
-  await db.delete(raidQueue).where(eq(raidQueue.clerkId, clerkId));
+  // Guard: only delete if not already claimed in a match — prevents erasing a live match assignment
+  await db.delete(raidQueue).where(and(eq(raidQueue.clerkId, clerkId), isNull(raidQueue.matchId)));
 }
 
 export async function getRaidQueueEntry(clerkId) {

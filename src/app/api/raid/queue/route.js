@@ -1,6 +1,7 @@
 import { getRequestAuth } from "@/lib/clerk-guard";
 import { getUserByClerkId } from "@/lib/db-users";
-import { enqueueForRaid, getRaidMatchForUser, tryMatchRaid } from "@/lib/db-raid";
+import { cancelRaidQueue, enqueueForRaid, getRaidMatchForUser, tryMatchRaid } from "@/lib/db-raid";
+import { isTeamCancelled } from "@/lib/db-raid-invite";
 import { markUserQueueing } from "@/lib/db-presence";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +32,15 @@ export async function POST(request) {
     return Response.json({ matched: true, ...existing });
   }
 
+  // For preformed teams: check if a teammate cancelled — stop re-enqueuing and signal the client
+  if (teamGroupId) {
+    const cancelled = await isTeamCancelled(teamGroupId);
+    if (cancelled) {
+      await cancelRaidQueue(clerkId).catch(() => {});
+      return Response.json({ teamCancelled: true });
+    }
+  }
+
   let displayName = "Player";
   try {
     const user = await getUserByClerkId(clerkId);
@@ -43,6 +53,12 @@ export async function POST(request) {
   const match = await tryMatchRaid(clerkId, displayName, teamGroupId);
   if (match) {
     return Response.json({ matched: true, ...match });
+  }
+
+  // A concurrent request may have claimed this player between our pre-enqueue check and now
+  const lateMatch = await getRaidMatchForUser(clerkId);
+  if (lateMatch) {
+    return Response.json({ matched: true, ...lateMatch });
   }
 
   return Response.json({ matched: false });
