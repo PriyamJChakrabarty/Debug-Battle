@@ -17,10 +17,16 @@ const CATS = [
 const PTS_PER_FIX   = 20;
 const TEAM_COLORS   = ["#3ddc84", "#22d3ee"];
 const TEAM_LABELS_DEFAULT = ["Alpha", "Bravo"];
-// teamSideId: the match-side (0 or 1) that the social team occupies — passed from server
-function getTeamLabel(teamId, teamSideId, teamName) {
-  if (teamName && teamId === teamSideId) return teamName;
+function getTeamLabel(teamId, formalTeams) {
+  const formalTeam = formalTeams.find((team) => team.teamSideId === teamId);
+  if (formalTeam?.teamName) return formalTeam.teamName;
   return TEAM_LABELS_DEFAULT[teamId] ?? `Team ${teamId}`;
+}
+
+function getFormalTeamResult(teamSideId, winnerTeam) {
+  if (winnerTeam === null) return { delta: 0, label: "DRAW" };
+  if (winnerTeam === teamSideId) return { delta: 1, label: "WIN" };
+  return { delta: -1, label: "LOSS" };
 }
 
 function formatTime(secs) {
@@ -212,7 +218,7 @@ function CategoryRow({ cat, vulns, catProg, isActive, onToggle, onCheck, checkin
 }
 
 // ── Live scoreboard (right panel top) ─────────────────────────
-function Scoreboard({ teams, myTeamId, teamSideId, timeLeft, matchStatus, winnerTeam, teamName }) {
+function Scoreboard({ teams, myTeamId, formalTeams, timeLeft, matchStatus, winnerTeam }) {
   const timerColor  = timeLeft !== null && timeLeft <= 10 ? "#ff5c5c" : "#f5b942";
   const matchEnded  = matchStatus === "completed" || matchStatus === "abandoned";
 
@@ -230,7 +236,7 @@ function Scoreboard({ teams, myTeamId, teamSideId, timeLeft, matchStatus, winner
         </span>
         {matchEnded ? (
           <span style={{ fontSize: "11px", fontWeight: 700, color: winnerTeam !== null ? TEAM_COLORS[winnerTeam] : "#f5b942" }}>
-            {matchStatus === "abandoned" ? "⚠ Abandoned" : winnerTeam !== null ? `${getTeamLabel(winnerTeam, teamSideId ?? myTeamId, teamName)} wins!` : "Draw"}
+            {matchStatus === "abandoned" ? "⚠ Abandoned" : winnerTeam !== null ? `${getTeamLabel(winnerTeam, formalTeams)} wins!` : "Draw"}
           </span>
         ) : (
           <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
@@ -258,7 +264,7 @@ function Scoreboard({ teams, myTeamId, teamSideId, timeLeft, matchStatus, winner
               <div style={{ display: "flex", alignItems: "center", gap: "5px", marginBottom: "6px" }}>
                 <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: color, flexShrink: 0 }} />
                 <span style={{ fontSize: "10px", fontWeight: 800, color, letterSpacing: "0.06em" }}>
-                  {getTeamLabel(team.teamId, teamSideId ?? myTeamId, teamName)}
+                  {getTeamLabel(team.teamId, formalTeams)}
                   {isWinner && " 🏆"}
                 </span>
                 <span style={{ marginLeft: "auto", fontSize: "14px", fontWeight: 900, color, fontVariantNumeric: "tabular-nums" }}>
@@ -288,9 +294,9 @@ function Scoreboard({ teams, myTeamId, teamSideId, timeLeft, matchStatus, winner
         })}
       </div>
 
-      {teamName && (
+      {formalTeams.length > 0 && (
         <div style={{ marginTop: "8px", fontSize: "10px", color: "#4a6570", lineHeight: 1.5 }}>
-          Team raid tracked: this final result adds exactly +1 team win/loss in Social, while each participant also gets their own personal raid result.
+          Team raid tracked: formal team names, Social team record, and Past Raids all sync from the completed match.
         </div>
       )}
     </div>
@@ -302,8 +308,7 @@ export default function LiveRaidClient({
   matchId, myClerkId, myName,
   initialState,
   codebaseName, files, filesCode, fileTree,
-  teamName = null,
-  teamSideId = null,
+  formalTeams = [],
 }) {
   const [selectedPath,   setSelectedPath]   = useState(files[0]?.Path ?? null);
   const [editedCodes,    setEditedCodes]    = useState(() => ({ ...filesCode }));
@@ -347,6 +352,10 @@ export default function LiveRaidClient({
   const orderedTeams = useMemo(
     () => [...teams].sort((a, b) => a.teamId - b.teamId),
     [teams]
+  );
+  const orderedFormalTeams = useMemo(
+    () => [...formalTeams].sort((a, b) => a.teamSideId - b.teamSideId),
+    [formalTeams]
   );
 
   // ── Timer ────────────────────────────────────────────────────
@@ -459,7 +468,6 @@ export default function LiveRaidClient({
   // END SCREEN
   // ─────────────────────────────────────────────────────────────
   if (matchEnded) {
-    const myTeam    = orderedTeams.find((t) => t.teamId === myTeamId);
     const weWon     = winnerTeam === myTeamId;
     const isDraw    = matchStatus === "completed" && winnerTeam === null;
 
@@ -468,6 +476,7 @@ export default function LiveRaidClient({
         flex: 1, display: "flex", flexDirection: "column",
         alignItems: "center", justifyContent: "center", gap: "28px",
         background: "#0d1a1f", fontFamily: "'Segoe UI','Aptos','Trebuchet MS',sans-serif",
+        position: "relative",
       }}>
         <div style={{ fontSize: "52px" }}>
           {matchStatus === "abandoned" ? "🔌" : weWon ? "🏆" : isDraw ? "🤝" : "💀"}
@@ -498,7 +507,7 @@ export default function LiveRaidClient({
                 {i === 1 && <div style={{ fontSize: "20px", color: "#4a6570", fontWeight: 900 }}>VS</div>}
                 <div key={team.teamId} style={{ textAlign: "center" }}>
                   <div style={{ fontSize: "10px", fontWeight: 800, color, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "10px" }}>
-                    {getTeamLabel(team.teamId, teamSideId ?? myTeamId, teamName)}{isWinner ? " 🏆" : ""}{team.teamId === myTeamId ? " (You)" : ""}
+                    {getTeamLabel(team.teamId, orderedFormalTeams)}{isWinner ? " 🏆" : ""}{team.teamId === myTeamId ? " (You)" : ""}
                   </div>
                   <div style={{ fontSize: "38px", fontWeight: 900, color: "#e8f0f3" }}>{team.totalScore}</div>
                   <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "2px" }}>
@@ -514,10 +523,32 @@ export default function LiveRaidClient({
           })}
         </div>
 
-        {teamName && (
-          <p style={{ margin: "-8px 0 0", fontSize: "12px", color: "#8ba0a6", textAlign: "center" }}>
-            This team raid updates {teamName} in Social with exactly +1 team win/loss and a new Past Raids entry.
-          </p>
+        {orderedFormalTeams.length > 0 && (
+          <div style={{
+            position: "absolute",
+            top: 20,
+            right: 20,
+            width: "min(340px, calc(100vw - 40px))",
+            padding: "10px 14px",
+            borderRadius: "10px",
+            border: "1px solid rgba(201,214,218,0.1)",
+            background: "rgba(255,255,255,0.03)",
+            display: "flex",
+            flexDirection: "column",
+            gap: "6px",
+          }}>
+            {orderedFormalTeams.map((formalTeam) => {
+              const debugResult = getFormalTeamResult(formalTeam.teamSideId, winnerTeam);
+              const color = debugResult.delta > 0 ? "#3ddc84" : debugResult.delta < 0 ? "#ff5c5c" : "#f5b942";
+              return (
+                <div key={`${formalTeam.sourceTeamId ?? "team"}-${formalTeam.teamSideId}`} style={{ fontSize: "12px", color: "#c9d6da" }}>
+                  Team: <span style={{ color: "#e8f0f3", fontWeight: 800 }}>{formalTeam.teamName}</span>
+                  {" "}Result: <span style={{ color, fontWeight: 800 }}>{debugResult.label}</span>
+                  {" "}({debugResult.delta > 0 ? "+1" : debugResult.delta < 0 ? "-1" : "0"} in Social)
+                </div>
+              );
+            })}
+          </div>
         )}
 
         <div style={{ display: "flex", gap: "12px" }}>
@@ -698,11 +729,10 @@ export default function LiveRaidClient({
           <Scoreboard
             teams={orderedTeams}
             myTeamId={myTeamId}
-            teamSideId={teamSideId}
+            formalTeams={orderedFormalTeams}
             timeLeft={timeLeft}
             matchStatus={matchStatus}
             winnerTeam={winnerTeam}
-            teamName={teamName}
           />
 
           {/* Vulnerability hunter header */}

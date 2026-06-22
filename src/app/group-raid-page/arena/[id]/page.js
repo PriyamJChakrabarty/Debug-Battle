@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { hasClerkCredentials } from "@/lib/clerk-config";
 import { getUserByClerkId } from "@/lib/db-users";
 import { getRaidMatchState } from "@/lib/db-raid";
-import { getTeamNameForMatch } from "@/lib/db-teams";
+import { getFormalTeamInfoForMatch } from "@/lib/db-teams";
 import { loadCodebase } from "@/lib/load-codebase";
 import HeartbeatClient from "@/components/heartbeat";
 import LiveRaidClient from "./live-raid-client";
@@ -39,10 +39,13 @@ export default async function RaidArenaPage({ params, searchParams }) {
     myName = resolveDisplayName(user);
   } catch {}
 
-  // DB lookup wins over URL param: works for all players (incl. opponents who don't have the URL param)
-  const dbTeamInfo = await getTeamNameForMatch(matchId).catch(() => null);
-  const teamName   = dbTeamInfo?.teamName ?? (teamNameParam ? decodeURIComponent(teamNameParam) : null);
-  const teamSideId = dbTeamInfo?.teamSideId ?? null;
+  const dbTeamInfo = await getFormalTeamInfoForMatch(matchId).catch(() => null);
+  const fallbackTeamName = teamNameParam ? decodeURIComponent(teamNameParam) : null;
+  const formalTeams = dbTeamInfo?.formalTeams?.length
+    ? dbTeamInfo.formalTeams
+    : fallbackTeamName
+    ? [{ sourceTeamId: null, teamName: fallbackTeamName, teamSideId: state.me.teamId }]
+    : [];
 
   return (
     <div style={{
@@ -61,8 +64,7 @@ export default async function RaidArenaPage({ params, searchParams }) {
         files={codebaseData.files}
         filesCode={codebaseData.filesCode}
         fileTree={codebaseData.fileTree}
-        teamName={teamName}
-        teamSideId={teamSideId}
+        formalTeams={formalTeams}
       />
     </div>
   );
