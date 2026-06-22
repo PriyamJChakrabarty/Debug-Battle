@@ -340,6 +340,8 @@ export default function LiveRaidClient({
   const [activeCategory, setActiveCat]      = useState(null);
   const [checking,       setChecking]       = useState(false);
   const [lastCheck,      setLastCheck]      = useState(null);
+  const [surrenderConfirm, setSurrenderConfirm] = useState(false);
+  const [surrendering,     setSurrendering]     = useState(false);
 
   const pollRef          = useRef(null);
   const timerRef         = useRef(null);
@@ -548,6 +550,16 @@ export default function LiveRaidClient({
     }
   }
 
+  async function handleSurrender() {
+    if (surrendering || matchEnded) return;
+    setSurrendering(true);
+    try {
+      await fetch(`/api/raid/match/${matchId}/surrender`, { method: "POST" });
+    } catch {}
+    setSurrendering(false);
+    setSurrenderConfirm(false);
+  }
+
   // ─────────────────────────────────────────────────────────────
   // END SCREEN
   // ─────────────────────────────────────────────────────────────
@@ -728,6 +740,64 @@ export default function LiveRaidClient({
             {timeLeft !== null ? formatTime(timeLeft) : "—"}
           </span>
         </div>
+
+        {/* Surrender */}
+        {!surrenderConfirm ? (
+          <button
+            onClick={() => setSurrenderConfirm(true)}
+            disabled={matchEnded}
+            style={{
+              background: "transparent",
+              border: "1px solid rgba(255,92,92,0.35)",
+              color: "#ff5c5c",
+              padding: "3px 11px",
+              borderRadius: "5px",
+              fontSize: "11px",
+              fontWeight: 700,
+              cursor: matchEnded ? "not-allowed" : "pointer",
+              opacity: matchEnded ? 0.4 : 1,
+            }}
+          >
+            Surrender
+          </button>
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <span style={{ fontSize: "10.5px", color: "#ff5c5c", fontWeight: 700 }}>
+              Your team loses. Sure?
+            </span>
+            <button
+              onClick={handleSurrender}
+              disabled={surrendering}
+              style={{
+                background: "#ff5c5c",
+                border: "none",
+                color: "#0d1a1f",
+                padding: "3px 10px",
+                borderRadius: "5px",
+                fontSize: "11px",
+                fontWeight: 800,
+                cursor: surrendering ? "not-allowed" : "pointer",
+              }}
+            >
+              {surrendering ? "…" : "Yes"}
+            </button>
+            <button
+              onClick={() => setSurrenderConfirm(false)}
+              style={{
+                background: "transparent",
+                border: "1px solid rgba(201,214,218,0.15)",
+                color: "#8ba0a6",
+                padding: "3px 10px",
+                borderRadius: "5px",
+                fontSize: "11px",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              No
+            </button>
+          </div>
+        )}
 
         <span style={{ fontSize: "10px", color: "#2a3a40" }}>#{matchId}</span>
       </div>

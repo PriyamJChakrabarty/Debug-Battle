@@ -307,6 +307,55 @@ export async function finalizeRaidMatch(matchId, players = null) {
   return { winnerTeam, players: matchPlayers };
 }
 
+// ── Surrender ─────────────────────────────────────────────────
+
+export async function surrenderRaidMatch(matchId, clerkId) {
+  console.log(`[SURRENDER] matchId=${matchId} clerkId=${clerkId.slice(-6)}`);
+
+  const [match] = await db
+    .select()
+    .from(raidMatches)
+    .where(and(eq(raidMatches.id, matchId), eq(raidMatches.status, "active")))
+    .limit(1);
+  if (!match) throw new Error("Match not active");
+
+  const [player] = await db
+    .select()
+    .from(raidMatchPlayers)
+    .where(and(eq(raidMatchPlayers.matchId, matchId), eq(raidMatchPlayers.clerkId, clerkId)))
+    .limit(1);
+  if (!player) throw new Error("Player not in match");
+
+  const surrenderingTeam = player.teamId;
+  const winnerTeam = surrenderingTeam === 0 ? 1 : 0;
+  console.log(`[SURRENDER] team ${surrenderingTeam} surrenders → team ${winnerTeam} wins`);
+
+  const now = new Date();
+  await db
+    .update(raidMatches)
+    .set({ status: "completed", winnerTeam, updatedAt: now })
+    .where(eq(raidMatches.id, matchId));
+
+  const allPlayers = await db
+    .select()
+    .from(raidMatchPlayers)
+    .where(eq(raidMatchPlayers.matchId, matchId));
+
+  await Promise.all(
+    allPlayers.map((p) => updateBestScore(p.clerkId, p.totalScore).catch(() => {}))
+  );
+
+  await resolveTeamRaidResult(matchId, allPlayers, winnerTeam).catch((err) => {
+    console.error("[surrenderRaidMatch] resolveTeamRaidResult failed:", err?.message ?? err);
+  });
+
+  await publishRaidMatchUpdated(matchId, "surrendered").catch((err) => {
+    console.error("[surrenderRaidMatch] publishRaidMatchUpdated failed:", err?.message ?? err);
+  });
+
+  return { winnerTeam, surrenderingTeam };
+}
+
 // ── Auto-complete when timer expires ──────────────────────────
 
 export async function autoCompleteRaidIfExpired(matchId) {
