@@ -1,5 +1,6 @@
 import Link from "next/link";
 import SiteAuthControls from "./site-auth-controls";
+import RaidNotificationBell from "./raid-notifications";
 
 const NAV_LINKS = [
   { href: "/",            label: "Home"        },
@@ -84,8 +85,11 @@ export default function SiteNav({ active }) {
         </Link>
       </div>
 
-      {/* Auth */}
-      <SiteAuthControls />
+      {/* Raid notification bell + Auth */}
+      <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+        <RaidNotificationBell />
+        <SiteAuthControls />
+      </div>
     </nav>
   );
 }

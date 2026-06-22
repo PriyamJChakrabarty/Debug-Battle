@@ -1,7 +1,6 @@
 import { ClerkProvider } from "@clerk/nextjs";
 
 import { hasClerkCredentials } from "@/lib/clerk-config";
-import RaidNotificationsGlobal from "@/components/raid-notifications";
 
 import "./globals.css";
 
@@ -12,12 +11,7 @@ export const metadata = {
 };
 
 export default function RootLayout({ children }) {
-  const app = hasClerkCredentials() ? (
-    <ClerkProvider>
-      {children}
-      <RaidNotificationsGlobal />
-    </ClerkProvider>
-  ) : children;
+  const app = hasClerkCredentials() ? <ClerkProvider>{children}</ClerkProvider> : children;
 
   return (
     <html lang="en" className="h-full antialiased">

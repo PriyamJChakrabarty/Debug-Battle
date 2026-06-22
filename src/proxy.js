@@ -13,6 +13,7 @@ const isProtectedRoute = createRouteMatcher([
   "/api/check-code(.*)",
   "/api/raid(.*)",
   "/group-raid-page(.*)",
+  "/notifications",
 ]);
 
 const clerkProxy = clerkMiddleware(async (auth, req) => {
