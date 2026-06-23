@@ -90,15 +90,16 @@ export function getAblyRealtimeChallengeChannel(challengeId) {
   return getRealtimeClient().channels.get(getChallengeChannelName(challengeId));
 }
 
-export function getRaidLobbyChannelName(teamGroupId) {
+// Per-team-challenge lobby channel
+export function getTeamChallengeChannelName(challengeId) {
   const prefix = process.env.ABLY_CHANNEL_PREFIX || "debug-battle";
-  return `${prefix}:raid-lobby:${teamGroupId}`;
+  return `${prefix}:team-challenge:${challengeId}`;
 }
 
-export function getAblyRestRaidLobbyChannel(teamGroupId) {
-  return getRestClient().channels.get(getRaidLobbyChannelName(teamGroupId));
+export function getAblyRestTeamChallengeChannel(challengeId) {
+  return getRestClient().channels.get(getTeamChallengeChannelName(challengeId));
 }
 
-export function getAblyRealtimeRaidLobbyChannel(teamGroupId) {
-  return getRealtimeClient().channels.get(getRaidLobbyChannelName(teamGroupId));
+export function getAblyRealtimeTeamChallengeChannel(challengeId) {
+  return getRealtimeClient().channels.get(getTeamChallengeChannelName(challengeId));
 }

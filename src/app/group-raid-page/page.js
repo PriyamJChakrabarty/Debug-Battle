@@ -3,13 +3,12 @@ import { auth } from "@clerk/nextjs/server";
 import { hasClerkCredentials } from "@/lib/clerk-config";
 import { getUserByClerkId } from "@/lib/db-users";
 import { getRaidMatchForUser } from "@/lib/db-raid";
-import { getActiveRaidLobbyForUser } from "@/lib/db-raid-invite";
 import SiteNav from "@/components/site-nav";
 import HeartbeatClient from "@/components/heartbeat";
 import GroupRaidLobbyClient from "./group-raid-lobby-client";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Group Raid — DebugBattle" };
+export const metadata = { title: "Group Raid - DebugBattle" };
 
 function resolveDisplayName(user) {
   if (!user) return "Player";
@@ -24,22 +23,16 @@ export default async function GroupRaidPage({ searchParams }) {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
-  // Reconnect to an existing active match
   const existing = await getRaidMatchForUser(userId);
   if (existing) redirect(`/group-raid-page/arena/${existing.matchId}`);
-
-  const { teamGroupId = null, partnerName = null } = await searchParams;
-
-  if (!teamGroupId) {
-    const activeLobby = await getActiveRaidLobbyForUser(userId);
-    if (activeLobby) redirect(`/raid-lobby/${activeLobby}`);
-  }
 
   let myName = "Player";
   try {
     const user = await getUserByClerkId(userId);
     myName = resolveDisplayName(user);
   } catch {}
+
+  const { teamGroupId = null, partnerName = null } = await searchParams;
 
   return (
     <div style={{

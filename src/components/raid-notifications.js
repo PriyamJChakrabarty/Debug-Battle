@@ -26,16 +26,17 @@ const KEYFRAMES = `
 `;
 
 export default function RaidNotificationBell() {
-  const [isOpen,     setIsOpen]     = useState(false);
-  const [pending,    setPending]    = useState([]);
-  const [challenges, setChallenges] = useState([]);
-  const [ringing,    setRinging]    = useState(false);
-  const [authFailed, setAuthFailed] = useState(false);
+  const [isOpen,         setIsOpen]         = useState(false);
+  const [pending,        setPending]        = useState([]);
+  const [challenges,     setChallenges]     = useState([]);
+  const [teamChallenges, setTeamChallenges] = useState([]);
+  const [ringing,        setRinging]        = useState(false);
+  const [authFailed,     setAuthFailed]     = useState(false);
   const wrapperRef   = useRef(null);
   const prevCountRef = useRef(0);
   const router       = useRouter();
 
-  // Poll for pending raid invites + duel challenges every 5s
+  // Poll for raid invites + duel challenges + team challenges every 5s
   useEffect(() => {
     if (authFailed) return;
     let active = true;
@@ -43,18 +44,21 @@ export default function RaidNotificationBell() {
     const tick = async () => {
       if (!active) return;
       try {
-        const [raidRes, duelRes] = await Promise.all([
+        const [raidRes, duelRes, teamRes] = await Promise.all([
           fetch("/api/raid/invite/pending"),
           fetch("/api/duel/challenge/pending"),
+          fetch("/api/team-challenge/pending"),
         ]);
         if (raidRes.status === 401) { setAuthFailed(true); return; }
         if (!active) return;
 
         const raidData = raidRes.ok ? await raidRes.json() : {};
         const duelData = duelRes.ok ? await duelRes.json() : [];
+        const teamData = teamRes.ok ? await teamRes.json() : [];
         const invites  = raidData.invites ?? [];
         const duels    = Array.isArray(duelData) ? duelData : [];
-        const total      = invites.length + duels.length;
+        const teams    = Array.isArray(teamData) ? teamData : [];
+        const total    = invites.length + duels.length + teams.length;
 
         if (total > prevCountRef.current) {
           setRinging(true);
@@ -63,6 +67,7 @@ export default function RaidNotificationBell() {
         prevCountRef.current = total;
         setPending(invites);
         setChallenges(duels);
+        setTeamChallenges(teams);
       } catch {}
     };
 
@@ -88,7 +93,16 @@ export default function RaidNotificationBell() {
       if (data.teamGroupId) {
         setPending([]);
         setIsOpen(false);
-        router.push(`/raid-lobby/${encodeURIComponent(data.teamGroupId)}`);
+        if (data.sourceTeamId) {
+          const params = new URLSearchParams({
+            teamGroupId: data.teamGroupId,
+            teamId: String(data.sourceTeamId),
+            teamName: data.sourceTeamName ?? "Your Team",
+          });
+          router.push(`/team-raid-wait?${params}`);
+        } else {
+          router.push(`/group-raid-page?teamGroupId=${data.teamGroupId}&partnerName=${encodeURIComponent(data.inviterName ?? "")}`);
+        }
       }
     } catch {}
   }
@@ -114,9 +128,31 @@ export default function RaidNotificationBell() {
     setChallenges((prev) => prev.filter((c) => c.id !== ch.id));
   }
 
-  const count     = pending.length + challenges.length;
+  function handleTeamChallengeView(tc) {
+    setIsOpen(false);
+    router.push(`/team-challenge/${tc.id}`);
+  }
+
+  async function handleTeamChallengeAccept(tc) {
+    try {
+      const r = await fetch(`/api/team-challenge/${tc.id}/accept`, { method: "POST" });
+      if (r.ok) {
+        setTeamChallenges((prev) => prev.filter((c) => c.id !== tc.id));
+        setIsOpen(false);
+        router.push(`/team-challenge/${tc.id}`);
+      }
+    } catch {}
+  }
+
+  async function handleTeamChallengeReject(tc) {
+    try { await fetch(`/api/team-challenge/${tc.id}/reject`, { method: "POST" }); } catch {}
+    setTeamChallenges((prev) => prev.filter((c) => c.id !== tc.id));
+  }
+
+  const count     = pending.length + challenges.length + teamChallenges.length;
   const topInvite = pending[0] ?? null;
   const topDuel   = challenges[0] ?? null;
+  const topTeam   = teamChallenges[0] ?? null;
 
   return (
     <>
@@ -234,6 +270,45 @@ export default function RaidNotificationBell() {
                     onMouseLeave={(e) => { e.currentTarget.style.color = "#9ca3af"; }}
                   >Decline</button>
                 </div>
+              </div>
+            )}
+
+            {/* Team challenge card */}
+            {topTeam && (
+              <div style={{
+                background: "rgba(34,211,238,0.05)", border: "1px solid rgba(34,211,238,0.22)",
+                borderRadius: "10px", padding: "12px", marginBottom: "8px",
+              }}>
+                <div style={{ fontSize: "11px", fontWeight: 800, color: "#22d3ee", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "6px" }}>
+                  🛡️ Team Challenge
+                </div>
+                <div style={{ fontSize: "13px", color: "#e8f0f3", marginBottom: "10px", lineHeight: 1.4 }}>
+                  <strong style={{ color: "#f5b942" }}>{topTeam.challengerTeamEmoji} {topTeam.challengerTeamName}</strong>
+                  {" challenged "}<strong style={{ color: "#22d3ee" }}>{topTeam.challengeeTeamEmoji} {topTeam.challengeeTeamName}</strong>!
+                </div>
+                {topTeam.amChallengeeCaptain && topTeam.status === "pending" ? (
+                  <div style={{ display: "flex", gap: "7px" }}>
+                    <button
+                      onClick={() => handleTeamChallengeAccept(topTeam)}
+                      style={{ flex: 1, background: "#22d3ee", color: "#0d1a1f", border: "none", borderRadius: "7px", padding: "7px 0", fontWeight: 800, cursor: "pointer", fontSize: "12px" }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "#0ea5e9"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "#22d3ee"; }}
+                    >Accept</button>
+                    <button
+                      onClick={() => handleTeamChallengeReject(topTeam)}
+                      style={{ flex: 1, background: "#1f2d34", color: "#9ca3af", border: "1px solid #334155", borderRadius: "7px", padding: "7px 0", cursor: "pointer", fontSize: "12px" }}
+                      onMouseEnter={(e) => { e.currentTarget.style.color = "#e8f0f3"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.color = "#9ca3af"; }}
+                    >Decline</button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => handleTeamChallengeView(topTeam)}
+                    style={{ width: "100%", background: "rgba(34,211,238,0.1)", color: "#22d3ee", border: "1px solid rgba(34,211,238,0.3)", borderRadius: "7px", padding: "7px 0", fontWeight: 700, cursor: "pointer", fontSize: "12px" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(34,211,238,0.18)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(34,211,238,0.1)"; }}
+                  >View Lobby →</button>
+                )}
               </div>
             )}
 

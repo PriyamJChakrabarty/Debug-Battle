@@ -180,6 +180,38 @@ export const raidInvitations = pgTable("raid_invitations", {
   updatedAt:       timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
 
+// ── Team Challenges (team vs team direct invite) ──────────────────
+
+export const teamChallenges = pgTable("team_challenges", {
+  id:                  serial("id").primaryKey(),
+  challengerTeamId:    integer("challenger_team_id").notNull(),
+  challengerTeamName:  text("challenger_team_name").notNull(),
+  challengerTeamEmoji: text("challenger_team_emoji").default("🛡️").notNull(),
+  challengeeTeamId:    integer("challengee_team_id").notNull(),
+  challengeeTeamName:  text("challengee_team_name").notNull(),
+  challengeeTeamEmoji: text("challengee_team_emoji").default("🛡️").notNull(),
+  challengerCaptainId: text("challenger_captain_id").notNull(),
+  challengeeCaptainId: text("challengee_captain_id").notNull(),
+  status:              text("status").default("pending").notNull(), // pending|accepted|cancelled|rejected|expired|matched
+  matchId:             integer("match_id"),
+  challengerReady:     boolean("challenger_ready").default(false).notNull(),
+  challengeeReady:     boolean("challengee_ready").default(false).notNull(),
+  expiresAt:           timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt:           timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt:           timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+export const teamChallengeLobbyMembers = pgTable("team_challenge_lobby_members", {
+  id:          serial("id").primaryKey(),
+  challengeId: integer("challenge_id").notNull(),
+  clerkId:     text("clerk_id").notNull(),
+  teamSide:    text("team_side").notNull(), // "challenger" | "challengee"
+  displayName: text("display_name").notNull(),
+  present:     boolean("present").default(false).notNull(),
+}, (t) => [
+  unique("tc_lobby_member_unique").on(t.challengeId, t.clerkId),
+]);
+
 // ── Duel Challenges (1v1 direct invite) ──────────────────────────
 
 export const duelChallenges = pgTable("duel_challenges", {

@@ -125,10 +125,6 @@ export default function GroupRaidLobbyClient({ myName, myClerkId, initialTeamGro
     });
     if (r.ok) {
       const data = await r.json();
-      if (data.teamGroupId) {
-        window.location.assign(`/raid-lobby/${encodeURIComponent(data.teamGroupId)}`);
-        return;
-      }
       setActiveInviteId(data.inviteId);
       setInviteMap((prev) => ({
         ...prev,

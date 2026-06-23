@@ -23,7 +23,7 @@ export async function GET(request, { params }) {
     getTeamRaidInviteStatuses(teamGroupId),
   ]);
 
-  const allAccepted    = invites.length > 0 && invites.every((i) => i.status === "accepted");
+  const allAccepted    = invites.length > 0 && invites.every((i) => i.status === "accepted" || i.status === "started");
   const anyCancelled   = invites.some((i) => i.status === "team_cancelled");
   const anyExpired     = invites.some((i) => i.status === "expired" || new Date(i.expiresAt) < new Date());
 
@@ -32,7 +32,7 @@ export async function GET(request, { params }) {
       id:            i.id,
       inviteeClerkId: i.inviteeClerkId,
       inviteeName:   i.inviteeName,
-      status:        i.status,
+      status:        i.status === "started" ? "accepted" : i.status,
       expiresAt:     i.expiresAt,
     })),
     allAccepted,
