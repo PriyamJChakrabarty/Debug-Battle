@@ -13,7 +13,7 @@ const TOTAL_CATEGORIES   = 5;
 
 // ── Challenge selection ───────────────────────────────────────
 
-function pickRandomProblem() {
+export function pickRandomProblem() {
   const raw = JSON.parse(
     readFileSync(join(process.cwd(), "public", "data", "data.json"), "utf-8")
   );

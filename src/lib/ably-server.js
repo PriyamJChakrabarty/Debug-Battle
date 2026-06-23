@@ -75,3 +75,17 @@ export function getAblyPlayerChannel(clerkId) {
 export function getAblyRealtimePlayerChannel(clerkId) {
   return getRealtimeClient().channels.get(getPlayerChannelName(clerkId));
 }
+
+// Per-challenge lobby channel for both parties
+export function getChallengeChannelName(challengeId) {
+  const prefix = process.env.ABLY_CHANNEL_PREFIX || "debug-battle";
+  return `${prefix}:duel-challenge:${challengeId}`;
+}
+
+export function getAblyRestChallengeChannel(challengeId) {
+  return getRestClient().channels.get(getChallengeChannelName(challengeId));
+}
+
+export function getAblyRealtimeChallengeChannel(challengeId) {
+  return getRealtimeClient().channels.get(getChallengeChannelName(challengeId));
+}

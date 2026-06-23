@@ -1,4 +1,4 @@
-import { integer, pgTable, serial, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { boolean, integer, pgTable, serial, text, timestamp, unique } from "drizzle-orm/pg-core";
 
 export const duelQueue = pgTable("duel_queue", {
   id:          serial("id").primaryKey(),
@@ -178,4 +178,21 @@ export const raidInvitations = pgTable("raid_invitations", {
   expiresAt:       timestamp("expires_at", { withTimezone: true }).notNull(),
   createdAt:       timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt:       timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+// ── Duel Challenges (1v1 direct invite) ──────────────────────────
+
+export const duelChallenges = pgTable("duel_challenges", {
+  id:                serial("id").primaryKey(),
+  challengerClerkId: text("challenger_clerk_id").notNull(),
+  challengerName:    text("challenger_name").notNull(),
+  challengeeClerkId: text("challengee_clerk_id").notNull(),
+  challengeeName:    text("challengee_name").notNull(),
+  status:            text("status").default("pending").notNull(), // pending|accepted|cancelled|rejected|expired|matched
+  matchId:           integer("match_id"),
+  challengerPresent: boolean("challenger_present").default(false).notNull(),
+  challengeePresent: boolean("challengee_present").default(false).notNull(),
+  expiresAt:         timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt:         timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt:         timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });

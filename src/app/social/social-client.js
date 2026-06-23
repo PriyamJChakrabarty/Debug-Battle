@@ -208,7 +208,7 @@ function SuggestCard({ user, isFollowed, onFollow, onMessage, online }) {
   );
 }
 
-function FollowCard({ user, onMessage, onUnfollow, online }) {
+function FollowCard({ user, onMessage, onUnfollow, onChallenge, online }) {
   const name = dname(user);
   const hasNote = !!user.noteText;
   return (
@@ -243,6 +243,19 @@ function FollowCard({ user, onMessage, onUnfollow, online }) {
           }}
         >
           Unfollow
+        </button>
+        <button
+          onClick={onChallenge}
+          style={{
+            fontSize: "11px", fontWeight: 700, padding: "5px 12px",
+            borderRadius: "6px", cursor: "pointer",
+            background: "rgba(245,185,66,0.08)", color: "#f5b942",
+            border: "1px solid rgba(245,185,66,0.3)",
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(245,185,66,0.16)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(245,185,66,0.08)"; }}
+        >
+          ⚔️ Challenge
         </button>
         <button
           onClick={onMessage}
@@ -401,6 +414,18 @@ export default function SocialClient({ myClerkId, myNote }) {
       setPendingTarget({ clerkId: user.clerkId, displayName: dname(user) });
     }
     setView("messages");
+  }
+
+  async function handleChallenge(user) {
+    try {
+      const r = await fetch("/api/duel/challenge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ challengeeClerkId: user.clerkId }),
+      });
+      const d = await r.json();
+      if (d.challengeId) window.location.href = `/duel-challenge/${d.challengeId}`;
+    } catch {}
   }
 
   // ── Send message ───────────────────────────────────────────
@@ -730,6 +755,7 @@ export default function SocialClient({ myClerkId, myNote }) {
                     online={onlineIds.has(u.clerkId)}
                     onUnfollow={() => handleUnfollow(u.clerkId)}
                     onMessage={() => handleDMClick(u)}
+                    onChallenge={() => handleChallenge(u)}
                   />
                 ))
               )}

@@ -28,13 +28,14 @@ const KEYFRAMES = `
 export default function RaidNotificationBell() {
   const [isOpen,     setIsOpen]     = useState(false);
   const [pending,    setPending]    = useState([]);
+  const [challenges, setChallenges] = useState([]);
   const [ringing,    setRinging]    = useState(false);
   const [authFailed, setAuthFailed] = useState(false);
   const wrapperRef   = useRef(null);
   const prevCountRef = useRef(0);
   const router       = useRouter();
 
-  // Poll for pending invites every 5s
+  // Poll for pending raid invites + duel challenges every 5s
   useEffect(() => {
     if (authFailed) return;
     let active = true;
@@ -42,19 +43,26 @@ export default function RaidNotificationBell() {
     const tick = async () => {
       if (!active) return;
       try {
-        const r = await fetch("/api/raid/invite/pending");
-        if (r.status === 401) { setAuthFailed(true); return; }
-        if (!r.ok || !active) return;
-        const data    = await r.json();
-        const invites = data.invites ?? [];
-        if (active) {
-          if (invites.length > prevCountRef.current) {
-            setRinging(true);
-            setTimeout(() => setRinging(false), 700);
-          }
-          prevCountRef.current = invites.length;
-          setPending(invites);
+        const [raidRes, duelRes] = await Promise.all([
+          fetch("/api/raid/invite/pending"),
+          fetch("/api/duel/challenge/pending"),
+        ]);
+        if (raidRes.status === 401) { setAuthFailed(true); return; }
+        if (!active) return;
+
+        const raidData = raidRes.ok ? await raidRes.json() : {};
+        const duelData = duelRes.ok ? await duelRes.json() : [];
+        const invites  = raidData.invites ?? [];
+        const duels    = Array.isArray(duelData) ? duelData : [];
+        const total      = invites.length + duels.length;
+
+        if (total > prevCountRef.current) {
+          setRinging(true);
+          setTimeout(() => setRinging(false), 700);
         }
+        prevCountRef.current = total;
+        setPending(invites);
+        setChallenges(duels);
       } catch {}
     };
 
@@ -99,8 +107,25 @@ export default function RaidNotificationBell() {
     setPending((prev) => prev.filter((i) => i.id !== invite.id));
   }
 
-  const count     = pending.length;
+  async function handleChallengeAccept(ch) {
+    try {
+      const r = await fetch(`/api/duel/challenge/${ch.id}/accept`, { method: "POST" });
+      if (r.ok) {
+        setChallenges((prev) => prev.filter((c) => c.id !== ch.id));
+        setIsOpen(false);
+        router.push(`/duel-challenge/${ch.id}`);
+      }
+    } catch {}
+  }
+
+  async function handleChallengeReject(ch) {
+    try { await fetch(`/api/duel/challenge/${ch.id}/reject`, { method: "POST" }); } catch {}
+    setChallenges((prev) => prev.filter((c) => c.id !== ch.id));
+  }
+
+  const count     = pending.length + challenges.length;
   const topInvite = pending[0] ?? null;
+  const topDuel   = challenges[0] ?? null;
 
   return (
     <>
@@ -174,12 +199,50 @@ export default function RaidNotificationBell() {
               fontSize: "11px", fontWeight: 800, color: "#f5b942",
               letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "12px",
             }}>
-              ⚔️ Raid Invitations{count > 0 ? ` (${count})` : ""}
+              Notifications{count > 0 ? ` (${count})` : ""}
             </div>
 
             {count === 0 && (
               <div style={{ color: "#4a6570", fontSize: "13px", textAlign: "center", padding: "12px 0" }}>
-                No pending invitations
+                No pending notifications
+              </div>
+            )}
+
+            {/* Duel challenge card */}
+            {topDuel && (
+              <div style={{
+                background: "rgba(245,185,66,0.06)", border: "1px solid rgba(245,185,66,0.25)",
+                borderRadius: "10px", padding: "12px",
+                marginBottom: "8px",
+              }}>
+                <div style={{ fontSize: "11px", fontWeight: 800, color: "#f5b942", letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: "6px" }}>
+                  ⚔️ Duel Challenge
+                </div>
+                <div style={{ fontSize: "13px", color: "#e8f0f3", marginBottom: "10px", lineHeight: 1.4 }}>
+                  <strong style={{ color: "#f5b942" }}>{topDuel.challengerName}</strong> challenged you to a 1v1 duel!
+                </div>
+                <div style={{ display: "flex", gap: "7px" }}>
+                  <button
+                    onClick={() => handleChallengeAccept(topDuel)}
+                    style={{
+                      flex: 1, background: "#f5b942", color: "#0d1a1f",
+                      border: "none", borderRadius: "7px", padding: "7px 0",
+                      fontWeight: 800, cursor: "pointer", fontSize: "12px",
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "#d4a017"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "#f5b942"; }}
+                  >Accept</button>
+                  <button
+                    onClick={() => handleChallengeReject(topDuel)}
+                    style={{
+                      flex: 1, background: "#1f2d34", color: "#9ca3af",
+                      border: "1px solid #334155", borderRadius: "7px", padding: "7px 0",
+                      cursor: "pointer", fontSize: "12px",
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = "#e8f0f3"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = "#9ca3af"; }}
+                  >Decline</button>
+                </div>
               </div>
             )}
 
@@ -220,9 +283,9 @@ export default function RaidNotificationBell() {
               </div>
             )}
 
-            {count > 1 && (
+            {count > (topInvite ? 1 : 0) + (topDuel ? 1 : 0) && (
               <div style={{ fontSize: "11px", color: "#4a6570", textAlign: "center", marginBottom: "10px" }}>
-                +{count - 1} more invitation{count - 1 > 1 ? "s" : ""}
+                +{count - (topInvite ? 1 : 0) - (topDuel ? 1 : 0)} more notification{count - (topInvite ? 1 : 0) - (topDuel ? 1 : 0) > 1 ? "s" : ""}
               </div>
             )}
 
