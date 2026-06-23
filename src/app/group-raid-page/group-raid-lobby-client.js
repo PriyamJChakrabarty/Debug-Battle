@@ -57,7 +57,6 @@ export default function GroupRaidLobbyClient({ myName, myClerkId, initialTeamGro
   // ── Load friends when entering invite phase ─────────────────
   useEffect(() => {
     if (phase !== "invite") return;
-    setFriendLoading(true);
     fetch("/api/raid/invite/friends")
       .then((r) => r.json())
       .then((d) => {
@@ -126,6 +125,10 @@ export default function GroupRaidLobbyClient({ myName, myClerkId, initialTeamGro
     });
     if (r.ok) {
       const data = await r.json();
+      if (data.teamGroupId) {
+        window.location.assign(`/raid-lobby/${encodeURIComponent(data.teamGroupId)}`);
+        return;
+      }
       setActiveInviteId(data.inviteId);
       setInviteMap((prev) => ({
         ...prev,
@@ -224,7 +227,7 @@ export default function GroupRaidLobbyClient({ myName, myClerkId, initialTeamGro
               <div style={{ textAlign: "center", padding: "64px 24px" }}>
                 <div style={{ fontSize: "40px", marginBottom: "16px" }}>🤝</div>
                 <div style={{ color: "#4a6570", fontSize: "14px" }}>
-                  You aren't following anyone yet. Follow players from the Leaderboard to invite them here.
+                  You aren&apos;t following anyone yet. Follow players from the Leaderboard to invite them here.
                 </div>
               </div>
             )}
@@ -273,7 +276,7 @@ export default function GroupRaidLobbyClient({ myName, myClerkId, initialTeamGro
             padding: "12px 28px", borderTop: "1px solid rgba(201,214,218,0.06)",
             fontSize: "11px", color: "#4a6570", textAlign: "center", flexShrink: 0,
           }}>
-            Your invited friend will get a notification. Once they accept, you'll both search for 2 opponents together.
+            Your invited friend will get a notification. Once they accept, you&apos;ll both search for 2 opponents together.
           </div>
         </div>
       </>
@@ -338,6 +341,7 @@ export default function GroupRaidLobbyClient({ myName, myClerkId, initialTeamGro
           <button
             onClick={() => {
               setActiveInviteId(null);
+              setFriendLoading(true);
               setPhase("invite");
             }}
             style={{

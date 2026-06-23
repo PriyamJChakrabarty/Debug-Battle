@@ -64,25 +64,6 @@ export default function SiteNav({ active }) {
           );
         })}
 
-        {/* Live Duel CTA */}
-        <Link
-          href="/live-battle"
-          style={{
-            fontSize: "13px",
-            fontWeight: 700,
-            color: "#0d1a1f",
-            textDecoration: "none",
-            background: active === "/live-battle" ? "#2bc96e" : "#3ddc84",
-            padding: "7px 18px",
-            borderRadius: "999px",
-            marginLeft: "10px",
-            boxShadow: "0 0 20px rgba(61,220,132,0.22)",
-            display: "flex", alignItems: "center", gap: "5px",
-            flexShrink: 0,
-          }}
-        >
-          <span style={{ fontSize: "12px" }}>⚔️</span> Duel
-        </Link>
       </div>
 
       {/* Raid notification bell + Auth */}

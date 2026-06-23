@@ -13,6 +13,29 @@ const CATEGORIES = [
   { key: "Maintainability", label: "Maintainability", icon: "🔧", color: "#a78bfa" },
 ];
 
+const DUEL_KEYFRAMES = `
+@keyframes duel-score-surge {
+  0% { transform: scale(0.94) translateY(10px); box-shadow: 0 0 0 rgba(0,0,0,0); }
+  35% { transform: scale(1.04) translateY(-4px); }
+  100% { transform: scale(1) translateY(0); box-shadow: 0 24px 60px rgba(0,0,0,0.28); }
+}
+@keyframes duel-score-glow {
+  0% { opacity: 0; transform: scale(0.85); }
+  40% { opacity: 0.95; }
+  100% { opacity: 0; transform: scale(1.18); }
+}
+@keyframes duel-score-delta {
+  0% { opacity: 0; transform: translateY(12px) scale(0.85); }
+  25% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-22px) scale(1.02); }
+}
+@keyframes duel-scoreboard-sheen {
+  0% { transform: translateX(-120%) skewX(-16deg); opacity: 0; }
+  18% { opacity: 0.16; }
+  100% { transform: translateX(220%) skewX(-16deg); opacity: 0; }
+}
+`;
+
 function formatTime(secs) {
   if (secs <= 0) return "0:00";
   const m = Math.floor(secs / 60);
@@ -38,6 +61,7 @@ export default function LiveDuelClient({
 
   // ── My progress ────────────────────────────────────────────
   const [catIdx,    setCatIdx]    = useState(initMe.categoryIndex);
+  const [unlockedCatIdx, setUnlockedCatIdx] = useState(initMe.categoryIndex);
   const [catFixed,  setCatFixed]  = useState(() =>
     CATEGORIES.map((c) => (initMe.fixedCounts?.[c.key] ?? []))
   );
@@ -59,16 +83,37 @@ export default function LiveDuelClient({
   const [openHints,       setOpenHints]       = useState(new Set());
   const [surrenderConfirm, setSurrenderConfirm] = useState(false);
   const [surrendering,    setSurrendering]    = useState(false);
+  const [scoreFx,         setScoreFx]         = useState({ me: 0, opponent: 0 });
+  const [scoreDelta,      setScoreDelta]      = useState({ me: null, opponent: null });
 
   const pollRef         = useRef(null);
   const timerRef        = useRef(null);
   const latestUpdatedAt = useRef(null);
+  const previousScores  = useRef({ me: initMe.score, opponent: initOpp?.score ?? 0 });
+  const scoreTimerRef   = useRef({ me: null, opponent: null });
 
   const cat        = CATEGORIES[catIdx] ?? CATEGORIES[0];
   const vulns      = vulnerabilities[cat.key] ?? [];
   const fixedNow   = catFixed[catIdx] ?? [];
-  const isLastCat  = catIdx >= CATEGORIES.length - 1;
+  const isLastCat  = unlockedCatIdx >= CATEGORIES.length - 1;
   const matchEnded = matchStatus === "completed" || matchStatus === "abandoned";
+  const viewingEarlierCategory = catIdx < unlockedCatIdx;
+
+  function triggerScoreFx(side, delta) {
+    if (delta <= 0) return;
+
+    if (scoreTimerRef.current[side]) {
+      clearTimeout(scoreTimerRef.current[side]);
+    }
+
+    setScoreFx((prev) => ({ ...prev, [side]: prev[side] + 1 }));
+    setScoreDelta((prev) => ({ ...prev, [side]: delta }));
+
+    scoreTimerRef.current[side] = setTimeout(() => {
+      setScoreDelta((prev) => ({ ...prev, [side]: null }));
+      scoreTimerRef.current[side] = null;
+    }, 950);
+  }
 
   // ── Canonical snapshot apply ───────────────────────────────
   function applyMatchSnapshot(snapshot) {
@@ -84,6 +129,10 @@ export default function LiveDuelClient({
     if (snapshot.me) {
       setMyScore(snapshot.me.score);
       setSelfDone((prev) => prev || snapshot.me.status === "finished");
+      if (typeof snapshot.me.categoryIndex === "number") {
+        setUnlockedCatIdx((prev) => Math.max(prev, snapshot.me.categoryIndex));
+        setCatIdx((prev) => Math.min(prev, Math.max(snapshot.me.categoryIndex, 0)));
+      }
     }
 
     if (snapshot.status && snapshot.status !== "active") {
@@ -93,6 +142,27 @@ export default function LiveDuelClient({
       clearInterval(timerRef.current);
     }
   }
+
+  useEffect(() => {
+    const previousMe = previousScores.current.me;
+    const previousOpponent = previousScores.current.opponent;
+    const currentOpponent = opponent?.score ?? 0;
+
+    if (myScore > previousMe) {
+      triggerScoreFx("me", myScore - previousMe);
+    }
+    if (currentOpponent > previousOpponent) {
+      triggerScoreFx("opponent", currentOpponent - previousOpponent);
+    }
+
+    previousScores.current = { me: myScore, opponent: currentOpponent };
+  }, [myScore, opponent?.score]);
+
+  useEffect(() => () => {
+    Object.values(scoreTimerRef.current).forEach((timerId) => {
+      if (timerId) clearTimeout(timerId);
+    });
+  }, []);
 
   // ── Timer ──────────────────────────────────────────────────
   useEffect(() => {
@@ -136,7 +206,7 @@ export default function LiveDuelClient({
     es.onerror = () => {};
 
     return () => es.close();
-  }, [matchId, matchEnded]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [matchId, matchEnded]);
 
   // ── Auto-end when timer hits 0 ─────────────────────────────
   useEffect(() => {
@@ -192,6 +262,12 @@ export default function LiveDuelClient({
 
   // ── Advance category ───────────────────────────────────────
   async function handleNext() {
+    if (viewingEarlierCategory) {
+      setCatIdx((prev) => Math.min(unlockedCatIdx, prev + 1));
+      setOpenHints(new Set());
+      setResult(null);
+      return;
+    }
     if (advancing) return;
     setAdvancing(true);
     setResult(null);
@@ -211,6 +287,7 @@ export default function LiveDuelClient({
           clearInterval(timerRef.current);
         }
       } else {
+        setUnlockedCatIdx(payload.categoryIndex);
         setCatIdx(payload.categoryIndex);
       }
 
@@ -225,6 +302,13 @@ export default function LiveDuelClient({
       next.has(idx) ? next.delete(idx) : next.add(idx);
       return next;
     });
+  }
+
+  function handlePrevious() {
+    if (catIdx === 0) return;
+    setCatIdx((prev) => Math.max(0, prev - 1));
+    setResult(null);
+    setOpenHints(new Set());
   }
 
   // ── Surrender ──────────────────────────────────────────────
@@ -326,6 +410,7 @@ export default function LiveDuelClient({
   // ════════════════════════════════════════════════════════════
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "#0d1117", color: "#c9d6da", fontFamily: "'Segoe UI','Aptos','Trebuchet MS',sans-serif" }}>
+      <style>{DUEL_KEYFRAMES}</style>
 
       {/* ── Top bar ─────────────────────────────────────────── */}
       <div style={{
@@ -428,6 +513,166 @@ export default function LiveDuelClient({
       </div>
 
       {/* ── Two-panel body ──────────────────────────────────── */}
+      <div style={{
+        position: "relative",
+        padding: "16px 18px 18px",
+        background: "radial-gradient(circle at top, rgba(61,220,132,0.16), transparent 38%), linear-gradient(135deg, #0d1620 0%, #0b1118 58%, #091015 100%)",
+        borderBottom: "1px solid rgba(201,214,218,0.08)",
+        overflow: "hidden",
+        flexShrink: 0,
+      }}>
+        <div
+          key={`scoreboard-sheen-${scoreFx.me}-${scoreFx.opponent}`}
+          style={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "none",
+            background: "linear-gradient(115deg, transparent 0%, rgba(255,255,255,0.16) 48%, transparent 100%)",
+            animation: "duel-scoreboard-sheen 1200ms ease-out",
+          }}
+        />
+
+        <div style={{ display: "flex", alignItems: "stretch", gap: "14px", position: "relative", zIndex: 1 }}>
+          <div
+            key={`me-score-${scoreFx.me}`}
+            style={{
+              position: "relative",
+              flex: 1,
+              borderRadius: "22px",
+              padding: "18px 20px",
+              background: "linear-gradient(155deg, rgba(61,220,132,0.18), rgba(8,22,18,0.88))",
+              border: "1px solid rgba(61,220,132,0.28)",
+              boxShadow: "0 24px 60px rgba(0,0,0,0.28)",
+              animation: scoreFx.me ? "duel-score-surge 760ms cubic-bezier(0.22, 1, 0.36, 1)" : undefined,
+              overflow: "hidden",
+            }}
+          >
+            {scoreDelta.me !== null && (
+              <div
+                key={`me-delta-${scoreFx.me}`}
+                style={{
+                  position: "absolute",
+                  top: "16px",
+                  right: "18px",
+                  color: "#7cffb1",
+                  fontSize: "14px",
+                  fontWeight: 900,
+                  letterSpacing: "0.04em",
+                  animation: "duel-score-delta 900ms ease-out forwards",
+                }}
+              >
+                +{scoreDelta.me}
+              </div>
+            )}
+            <div
+              key={`me-glow-${scoreFx.me}`}
+              style={{
+                position: "absolute",
+                inset: "-22%",
+                borderRadius: "50%",
+                background: "radial-gradient(circle, rgba(124,255,177,0.32) 0%, transparent 62%)",
+                pointerEvents: "none",
+                animation: scoreFx.me ? "duel-score-glow 760ms ease-out" : undefined,
+              }}
+            />
+            <div style={{ fontSize: "11px", color: "#8fe8b2", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.16em", marginBottom: "10px" }}>
+              You
+            </div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: "10px" }}>
+              <span style={{ fontSize: "60px", fontWeight: 900, color: "#e8fff1", letterSpacing: "-0.06em", lineHeight: 0.95 }}>
+                {myScore}
+              </span>
+              <span style={{ fontSize: "15px", fontWeight: 700, color: "#8fe8b2" }}>PTS</span>
+            </div>
+            <div style={{ marginTop: "12px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+              <span style={{ fontSize: "15px", fontWeight: 800, color: "#e8f0f3" }}>{myName}</span>
+              <span style={{ fontSize: "11px", color: "#8ba0a6" }}>Current: {cat.label}</span>
+            </div>
+          </div>
+
+          <div style={{
+            width: "124px",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: "22px",
+            background: "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02))",
+            border: "1px solid rgba(201,214,218,0.08)",
+            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+          }}>
+            <div style={{ fontSize: "11px", color: "#4a6570", fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", marginBottom: "8px" }}>
+              Duel
+            </div>
+            <div style={{ fontSize: "30px", fontWeight: 900, color: "#c9d6da", letterSpacing: "-0.08em", lineHeight: 1 }}>
+              VS
+            </div>
+            <div style={{ marginTop: "8px", fontSize: "10px", color: timerColor, fontWeight: 800, letterSpacing: "0.1em" }}>
+              {timeLeft !== null ? formatTime(timeLeft) : "—"}
+            </div>
+          </div>
+
+          <div
+            key={`opponent-score-${scoreFx.opponent}`}
+            style={{
+              position: "relative",
+              flex: 1,
+              borderRadius: "22px",
+              padding: "18px 20px",
+              background: "linear-gradient(155deg, rgba(34,211,238,0.16), rgba(8,16,24,0.88))",
+              border: "1px solid rgba(34,211,238,0.26)",
+              boxShadow: "0 24px 60px rgba(0,0,0,0.28)",
+              animation: scoreFx.opponent ? "duel-score-surge 760ms cubic-bezier(0.22, 1, 0.36, 1)" : undefined,
+              overflow: "hidden",
+            }}
+          >
+            {scoreDelta.opponent !== null && (
+              <div
+                key={`opponent-delta-${scoreFx.opponent}`}
+                style={{
+                  position: "absolute",
+                  top: "16px",
+                  right: "18px",
+                  color: "#7ceeff",
+                  fontSize: "14px",
+                  fontWeight: 900,
+                  letterSpacing: "0.04em",
+                  animation: "duel-score-delta 900ms ease-out forwards",
+                }}
+              >
+                +{scoreDelta.opponent}
+              </div>
+            )}
+            <div
+              key={`opponent-glow-${scoreFx.opponent}`}
+              style={{
+                position: "absolute",
+                inset: "-22%",
+                borderRadius: "50%",
+                background: "radial-gradient(circle, rgba(124,238,255,0.3) 0%, transparent 62%)",
+                pointerEvents: "none",
+                animation: scoreFx.opponent ? "duel-score-glow 760ms ease-out" : undefined,
+              }}
+            />
+            <div style={{ fontSize: "11px", color: "#84effe", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.16em", marginBottom: "10px" }}>
+              Opponent
+            </div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: "10px" }}>
+              <span style={{ fontSize: "60px", fontWeight: 900, color: "#f2fcff", letterSpacing: "-0.06em", lineHeight: 0.95 }}>
+                {opponent?.score ?? 0}
+              </span>
+              <span style={{ fontSize: "15px", fontWeight: 700, color: "#84effe" }}>PTS</span>
+            </div>
+            <div style={{ marginTop: "12px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+              <span style={{ fontSize: "15px", fontWeight: 800, color: "#e8f0f3" }}>{opponent?.displayName ?? "Opponent"}</span>
+              <span style={{ fontSize: "11px", color: "#8ba0a6" }}>
+                {opponent?.status === "finished" ? "Done ✓" : `Current: ${categoryLabel(opponent?.categoryIndex ?? 0)}`}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div style={{ display: "flex", flex: 1, overflow: "hidden", position: "relative" }}>
 
         {/* Left — code editor */}
@@ -547,41 +792,81 @@ export default function LiveDuelClient({
 
               {/* Category header */}
               <div style={{ padding: "10px 14px", borderBottom: "1px solid #21262d", flexShrink: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-                  <span style={{ fontSize: "15px", fontWeight: 700, color: "#e8f0f3" }}>
-                    {cat.icon} {cat.label}
-                  </span>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "8px" }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: "15px", fontWeight: 800, color: "#e8f0f3" }}>
+                      {cat.icon} {cat.label}
+                    </div>
+                    <div style={{ fontSize: "10px", color: viewingEarlierCategory ? "#f5b942" : "#4a6570", marginTop: "3px", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                      {viewingEarlierCategory ? "Reviewing previous category" : "Live category"}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end" }}>
                     <span style={{
-                      fontSize: "12px", fontWeight: 600,
+                      fontSize: "12px",
+                      fontWeight: 700,
                       color: fixedNow.length === vulns.length ? "#3fb950" : "#58a6ff",
-                      background: "#0d1117", padding: "2px 10px", borderRadius: "999px",
+                      background: "#0d1117",
+                      padding: "3px 10px",
+                      borderRadius: "999px",
+                      border: "1px solid rgba(255,255,255,0.05)",
                     }}>
                       {fixedNow.length} / {vulns.length}
                     </span>
                     <button
                       type="button"
+                      onClick={handlePrevious}
+                      disabled={catIdx === 0 || advancing}
+                      style={{
+                        background: catIdx === 0 || advancing ? "#11161d" : "#1d2630",
+                        color: catIdx === 0 || advancing ? "#55626d" : "#c9d6da",
+                        border: "1px solid rgba(201,214,218,0.12)",
+                        padding: "6px 12px",
+                        borderRadius: "8px",
+                        cursor: catIdx === 0 || advancing ? "not-allowed" : "pointer",
+                        fontSize: "12px",
+                        fontWeight: 700,
+                        opacity: catIdx === 0 || advancing ? 0.65 : 1,
+                      }}
+                    >
+                      Previous
+                    </button>
+                    <button
+                      type="button"
                       onClick={handleNext}
                       disabled={advancing}
                       style={{
-                        background: "#e94560", color: "#fff", border: "none",
-                        padding: "5px 14px", borderRadius: "6px",
+                        background: "linear-gradient(135deg, #ff5c5c, #e94560)",
+                        color: "#fff",
+                        border: "none",
+                        padding: "6px 14px",
+                        borderRadius: "8px",
                         cursor: advancing ? "not-allowed" : "pointer",
-                        fontSize: "12px", fontWeight: 600, opacity: advancing ? 0.6 : 1,
+                        fontSize: "12px",
+                        fontWeight: 800,
+                        opacity: advancing ? 0.6 : 1,
+                        boxShadow: advancing ? "none" : "0 12px 24px rgba(233,69,96,0.25)",
                       }}
                     >
-                      {isLastCat ? "Finish" : "Next →"}
+                      {viewingEarlierCategory ? "Next" : isLastCat ? "Finish" : "Next"}
                     </button>
                   </div>
                 </div>
 
                 {/* Progress dots */}
-                <div style={{ display: "flex", gap: "6px" }}>
+                <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                   {CATEGORIES.map((c, i) => (
-                    <div key={c.key} style={{
-                      flex: 1, height: "4px", borderRadius: "2px",
-                      background: i < catIdx ? "#3ddc84" : i === catIdx ? c.color : "#21262d",
-                    }} />
+                    <div
+                      key={c.key}
+                      style={{
+                        flex: 1,
+                        height: i === catIdx ? "8px" : "4px",
+                        borderRadius: "999px",
+                        background: i < unlockedCatIdx ? "#3ddc84" : i === unlockedCatIdx ? c.color : "#21262d",
+                        boxShadow: i === catIdx ? `0 0 0 1px ${c.color}55, 0 0 18px ${c.color}44` : "none",
+                        transition: "all 180ms ease",
+                      }}
+                    />
                   ))}
                 </div>
               </div>

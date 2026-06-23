@@ -565,13 +565,7 @@ function InTeamView({ team, myClerkId, onRefresh, onLeave }) {
                   setRaiding(true);
                   try {
                     const data = await apiFetch(`/api/teams/${team.id}/raid`, { method: "POST" });
-                    const params = new URLSearchParams({
-                      teamGroupId: data.teamGroupId,
-                      teamId:      String(data.teamId),
-                      teamName:    data.teamName,
-                      teamEmoji:   data.teamEmoji,
-                    });
-                    window.location.href = `/team-raid-wait?${params}`;
+                    window.location.href = `/raid-lobby/${encodeURIComponent(data.teamGroupId)}`;
                   } catch (e) { alert(e.message); setRaiding(false); }
                 }}
                 disabled={raiding}

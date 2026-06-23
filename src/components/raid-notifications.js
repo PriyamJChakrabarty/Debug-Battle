@@ -88,16 +88,7 @@ export default function RaidNotificationBell() {
       if (data.teamGroupId) {
         setPending([]);
         setIsOpen(false);
-        if (data.sourceTeamId) {
-          const params = new URLSearchParams({
-            teamGroupId: data.teamGroupId,
-            teamId:      String(data.sourceTeamId),
-            teamName:    data.sourceTeamName ?? "Your Team",
-          });
-          router.push(`/team-raid-wait?${params}`);
-        } else {
-          router.push(`/group-raid-page?teamGroupId=${data.teamGroupId}&partnerName=${encodeURIComponent(data.inviterName ?? "")}`);
-        }
+        router.push(`/raid-lobby/${encodeURIComponent(data.teamGroupId)}`);
       }
     } catch {}
   }

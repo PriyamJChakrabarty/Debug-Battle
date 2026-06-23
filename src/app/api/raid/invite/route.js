@@ -31,5 +31,5 @@ export async function POST(request) {
   } catch {}
 
   const invite = await sendInvite(session.userId, inviterName, inviteeClerkId);
-  return Response.json({ ok: true, inviteId: invite.id });
+  return Response.json({ ok: true, inviteId: invite.id, teamGroupId: invite.teamGroupId });
 }
