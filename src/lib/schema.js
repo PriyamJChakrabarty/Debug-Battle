@@ -175,6 +175,7 @@ export const raidInvitations = pgTable("raid_invitations", {
   teamGroupId:     text("team_group_id"),              // UUID: pre-set for team raids, set on accept for friend invites
   sourceTeamId:    integer("source_team_id"),          // non-null = triggered by team Raid button
   sourceTeamName:  text("source_team_name"),           // cached team name for notifications
+  present:         boolean("present").default(false).notNull(), // true = member is in the lobby waiting room
   expiresAt:       timestamp("expires_at", { withTimezone: true }).notNull(),
   createdAt:       timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt:       timestamp("updated_at", { withTimezone: true }).defaultNow(),
