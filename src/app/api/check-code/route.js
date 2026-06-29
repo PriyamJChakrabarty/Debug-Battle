@@ -1,4 +1,5 @@
-import { requireAuthenticatedRequest } from "@/lib/clerk-guard";
+import { getRequestAuth } from "@/lib/clerk-guard";
+import { applyRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -76,11 +77,13 @@ function logVuln(vuln, index, userCode, { alreadyFixed, groqFixed, groqAnalysis 
 }
 
 export async function POST(request) {
-  const unauthorized = await requireAuthenticatedRequest();
-
-  if (unauthorized) {
-    return unauthorized;
+  const session = await getRequestAuth();
+  if (session.clerkEnabled && !session.isAuthenticated) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const rateLimited = await applyRateLimit(request, "check-code", session.userId);
+  if (rateLimited) return rateLimited;
 
   const body = await request.json();
   const { userCode, vulnerabilities, alreadyFixed, category } = body;

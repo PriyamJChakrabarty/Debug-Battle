@@ -1,4 +1,5 @@
 import { getRequestAuth } from "@/lib/clerk-guard";
+import { applyRateLimit } from "@/lib/rate-limit";
 import { eq, and } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { duelMatchPlayers, duelMatches } from "@/lib/schema";
@@ -44,6 +45,9 @@ export async function POST(request, { params }) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
   if (!session.userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  const rateLimited = await applyRateLimit(request, "duel-submit", session.userId);
+  if (rateLimited) return rateLimited;
 
   const { id } = await params;
   const matchId = parseInt(id, 10);

@@ -1,6 +1,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { and, eq } from "drizzle-orm";
+import { applyRateLimit } from "@/lib/rate-limit";
 import { db } from "@/lib/db";
 import { raidMatchPlayers, raidMatches } from "@/lib/schema";
 import { getRequestAuth } from "@/lib/clerk-guard";
@@ -49,6 +50,9 @@ export async function POST(request, { params }) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
   if (!session.userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  const rateLimited = await applyRateLimit(request, "raid-submit", session.userId);
+  if (rateLimited) return rateLimited;
 
   const { id } = await params;
   const matchId = parseInt(id, 10);

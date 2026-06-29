@@ -1,13 +1,16 @@
-import { requireAuthenticatedRequest } from "@/lib/clerk-guard";
+import { getRequestAuth } from "@/lib/clerk-guard";
+import { applyRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request) {
-  const unauthorized = await requireAuthenticatedRequest();
-
-  if (unauthorized) {
-    return unauthorized;
+  const session = await getRequestAuth();
+  if (session.clerkEnabled && !session.isAuthenticated) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const rateLimited = await applyRateLimit(request, "summarize", session.userId);
+  if (rateLimited) return rateLimited;
 
   const { code } = await request.json();
 
