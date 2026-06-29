@@ -8,7 +8,7 @@ import HeartbeatClient from "@/components/heartbeat";
 import TeamRaidWaitClient from "./wait-client";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Waiting for Team - DebugBattle" };
+export const metadata = { title: "Waiting for Team - DebugRoyale" };
 
 function resolveDisplayName(user) {
   if (!user) return "Player";

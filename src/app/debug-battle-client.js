@@ -88,7 +88,7 @@ export default function DebugBattleClient({ initialPayload }) {
 
       {/* Top bar */}
       <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 16px", background: "#16213e", borderBottom: "1px solid #0f3460", flexShrink: 0 }}>
-        <span style={{ fontWeight: 700, fontSize: "15px", color: "#e94560" }}>DebugBattle</span>
+        <span style={{ fontWeight: 700, fontSize: "15px", color: "#e94560" }}>DebugRoyale</span>
         <span style={{ fontSize: "12px", color: "#8b949e", background: "#0f3460", padding: "2px 10px", borderRadius: "999px" }}>
           {source === "groq" ? "Live Groq" : "Fallback"}
         </span>

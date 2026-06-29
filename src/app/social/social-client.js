@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import TeamsPanel from "./team-panel";
 
 const C = {
   bg:      "#0d1a1f",
@@ -499,7 +498,6 @@ export default function SocialClient({ myClerkId, myNote }) {
         {[
           { id: "messages", Icon: IconChat,   label: "Messages" },
           { id: "people",   Icon: IconPeople, label: "People"   },
-          { id: "teams",    Icon: IconShield, label: "Teams"    },
         ].map(({ id, Icon, label }) => (
           <button
             key={id}
@@ -649,13 +647,6 @@ export default function SocialClient({ myClerkId, myNote }) {
             )}
           </div>
         </>
-      )}
-
-      {/* ── Teams view ──────────────────────────────────────── */}
-      {view === "teams" && (
-        <div style={{ flex: 1, display: "flex", overflow: "hidden", minWidth: 0 }}>
-          <TeamsPanel myClerkId={myClerkId} />
-        </div>
       )}
 
       {/* ── People view ─────────────────────────────────────── */}

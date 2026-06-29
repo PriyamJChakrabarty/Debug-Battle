@@ -56,12 +56,7 @@ export default async function LandingPage() {
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "2px" }}>
           <span style={{ fontSize: "17px", fontWeight: 900, color: "#3ddc84", letterSpacing: "-0.03em" }}>Debug</span>
-          <span style={{ fontSize: "17px", fontWeight: 900, color: "#e8f0f3", letterSpacing: "-0.03em" }}>Battle</span>
-          <span style={{
-            fontSize: "10px", fontWeight: 700,
-            background: "#3ddc84", color: "#0d1a1f",
-            padding: "1px 7px", borderRadius: "999px", marginLeft: "8px",
-          }}>BETA</span>
+          <span style={{ fontSize: "17px", fontWeight: 900, color: "#e8f0f3", letterSpacing: "-0.03em" }}>Royale</span>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -231,7 +226,7 @@ export default async function LandingPage() {
         display: "flex", alignItems: "center", justifyContent: "center",
         fontSize: "12px", color: "#2e4047",
       }}>
-        DebugBattle — BETA
+        DebugRoyale
       </footer>
     </div>
   );

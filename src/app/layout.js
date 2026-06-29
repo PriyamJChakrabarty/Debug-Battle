@@ -5,7 +5,7 @@ import { hasClerkCredentials } from "@/lib/clerk-config";
 import "./globals.css";
 
 export const metadata = {
-  title: "DebugBattle — Debug AI. Become a Bug Slayer.",
+  title: "DebugRoyale — Debug AI. Become a Bug Slayer.",
   description:
     "Competitive arena where engineers hunt security flaws, performance bottlenecks, and ethical violations in real code. Five categories, one codebase, one winner.",
 };

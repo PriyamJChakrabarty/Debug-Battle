@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, inArray, isNotNull, lt, ne, sql } from "drizzle-orm";
 import { db } from "./db";
-import { duelMatchPlayers, duelMatches, raidMatchPlayers, raidMatches, users } from "./schema";
+import { duelMatchPlayers, duelMatches, raidMatchPlayers, raidMatches, teams, users } from "./schema";
 
 export async function upsertUser({ clerkId, email, firstName, lastName, imageUrl, username }) {
   const rows = await db
@@ -141,6 +141,70 @@ export async function getUserStats(clerkId) {
     losses:             Number(lossesRow?.n ?? 0) + Number(raidLossesRow?.n ?? 0),
     questionsPracticed: Number(slotsRow?.n ?? 0),
   };
+}
+
+// ── Leaderboard sub-sections ──────────────────────────────────
+
+export async function getDuelWinsLeaderboard(limit = 10) {
+  return db
+    .select({
+      id:        users.id,
+      firstName: users.firstName,
+      lastName:  users.lastName,
+      username:  users.username,
+      count:     sql`cast(count(*) as int)`,
+    })
+    .from(duelMatches)
+    .innerJoin(
+      duelMatchPlayers,
+      and(
+        eq(duelMatchPlayers.matchId, duelMatches.id),
+        eq(duelMatchPlayers.clerkId, duelMatches.winnerClerkId),
+      ),
+    )
+    .innerJoin(users, eq(users.clerkId, duelMatchPlayers.clerkId))
+    .where(and(eq(duelMatches.status, "completed"), isNotNull(duelMatches.winnerClerkId)))
+    .groupBy(users.id, users.firstName, users.lastName, users.username)
+    .orderBy(desc(sql`count(*)`))
+    .limit(limit);
+}
+
+export async function getGroupWinsLeaderboard(limit = 10) {
+  return db
+    .select({
+      id:        users.id,
+      firstName: users.firstName,
+      lastName:  users.lastName,
+      username:  users.username,
+      count:     sql`cast(count(*) as int)`,
+    })
+    .from(raidMatches)
+    .innerJoin(
+      raidMatchPlayers,
+      and(
+        eq(raidMatchPlayers.matchId, raidMatches.id),
+        sql`${raidMatches.winnerTeam} = ${raidMatchPlayers.teamId}`,
+      ),
+    )
+    .innerJoin(users, eq(users.clerkId, raidMatchPlayers.clerkId))
+    .where(and(eq(raidMatches.status, "completed"), isNotNull(raidMatches.winnerTeam)))
+    .groupBy(users.id, users.firstName, users.lastName, users.username)
+    .orderBy(desc(sql`count(*)`))
+    .limit(limit);
+}
+
+export async function getTeamsLeaderboard(limit = 50) {
+  return db
+    .select({
+      id:     teams.id,
+      name:   teams.name,
+      emoji:  teams.emoji,
+      wins:   teams.wins,
+      losses: teams.losses,
+    })
+    .from(teams)
+    .orderBy(desc(teams.wins), asc(teams.id))
+    .limit(limit);
 }
 
 export async function getUserRaidHistory(clerkId, limit = 20) {

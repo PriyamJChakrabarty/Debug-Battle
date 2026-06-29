@@ -6,7 +6,7 @@ import SiteNav from "@/components/site-nav";
 import HeartbeatClient from "@/components/heartbeat";
 import MatchmakingClient from "./matchmaking-client";
 
-export const metadata = { title: "Live Battle — DebugBattle" };
+export const metadata = { title: "Live Battle — DebugRoyale" };
 
 function resolveDisplayName(user) {
   if (!user) return "Player";

@@ -7,7 +7,7 @@ import HeartbeatClient from "@/components/heartbeat";
 import NotificationsClient from "./notifications-client";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Raid Invitations — DebugBattle" };
+export const metadata = { title: "Raid Invitations — DebugRoyale" };
 
 export default async function NotificationsPage() {
   if (!hasClerkCredentials()) redirect("/sign-in");

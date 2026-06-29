@@ -5,7 +5,7 @@ import VulnerabilityClient from "../vulnerability-client";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Practice — DebugBattle",
+  title: "Practice — DebugRoyale",
 };
 
 export default function DuelPage() {

@@ -1,11 +1,10 @@
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
 import { hasClerkCredentials } from "@/lib/clerk-config";
-import { getUserByClerkId } from "@/lib/db-users";
 import SiteNav from "@/components/site-nav";
-import SocialClient from "./social-client";
+import TeamsPanel from "@/app/social/team-panel";
 
-export const metadata = { title: "Social — DebugRoyale" };
+export const metadata = { title: "Teams — DebugRoyale" };
 
 const PAGE_BG = {
   display: "flex",
@@ -16,12 +15,14 @@ const PAGE_BG = {
   fontFamily: "'Segoe UI', 'Aptos', 'Trebuchet MS', sans-serif",
 };
 
-export default async function SocialPage() {
+export default async function TeamsPage() {
   if (!hasClerkCredentials()) {
     return (
       <div style={PAGE_BG}>
-        <SiteNav active="/social" />
-        <SocialClient myClerkId={null} myNote={null} />
+        <SiteNav active="/teams" />
+        <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+          <TeamsPanel myClerkId={null} />
+        </div>
       </div>
     );
   }
@@ -29,17 +30,11 @@ export default async function SocialPage() {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
 
-  let myNote = null;
-  try {
-    const me = await getUserByClerkId(userId);
-    myNote = me?.noteText ?? null;
-  } catch { /* DB not connected yet */ }
-
   return (
     <div style={PAGE_BG}>
-      <SiteNav active="/social" />
+      <SiteNav active="/teams" />
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        <SocialClient myClerkId={userId} myNote={myNote} />
+        <TeamsPanel myClerkId={userId} />
       </div>
     </div>
   );

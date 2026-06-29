@@ -1,11 +1,13 @@
 import Link from "next/link";
 import SiteAuthControls from "./site-auth-controls";
 import RaidNotificationBell from "./raid-notifications";
+import { FEATURES } from "@/lib/features";
 
 const NAV_LINKS = [
   { href: "/home",        label: "Home"        },
-  { href: "/duel",        label: "Practice"    },
+  ...(FEATURES.PRACTICE ? [{ href: "/duel", label: "Practice" }] : []),
   { href: "/leaderboard", label: "Leaderboard" },
+  { href: "/teams",       label: "Teams"       },
   { href: "/social",      label: "Social"      },
 ];
 
@@ -29,15 +31,7 @@ export default function SiteNav({ active }) {
       {/* Logo */}
       <Link href="/home" style={{ display: "flex", alignItems: "center", gap: "2px", textDecoration: "none", flexShrink: 0 }}>
         <span style={{ fontSize: "17px", fontWeight: 900, color: "#3ddc84", letterSpacing: "-0.03em" }}>Debug</span>
-        <span style={{ fontSize: "17px", fontWeight: 900, color: "#e8f0f3", letterSpacing: "-0.03em" }}>Battle</span>
-        <span style={{
-          fontSize: "10px", fontWeight: 700,
-          background: "#3ddc84", color: "#0d1a1f",
-          padding: "1px 7px", borderRadius: "999px",
-          marginLeft: "8px",
-        }}>
-          BETA
-        </span>
+        <span style={{ fontSize: "17px", fontWeight: 900, color: "#e8f0f3", letterSpacing: "-0.03em" }}>Royale</span>
       </Link>
 
       {/* Nav links */}

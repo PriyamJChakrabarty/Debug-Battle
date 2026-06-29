@@ -4,9 +4,10 @@ import { useState } from "react";
 import Link from "next/link";
 import ReturnToDuelButton from "@/components/return-to-duel";
 import OnlinePlayersWidget from "@/components/online-players";
+import { FEATURES } from "@/lib/features";
 
 // ── Constants ──────────────────────────────────────────────────
-const CARDS = [
+const ALL_CARDS = [
   {
     id:        "practice",
     label:     "Practice",
@@ -41,6 +42,9 @@ const CARDS = [
     available: true,
   },
 ];
+
+const CARDS = ALL_CARDS.filter(c => c.id !== "practice" || FEATURES.PRACTICE);
+const DEFAULT_FOCUSED = Math.max(0, CARDS.findIndex(c => c.id === "duel"));
 
 const TABS = [
   { label: "Questions Solved", icon: "📋" },
@@ -348,7 +352,7 @@ function EmptyState({ icon, msg, hint, href, cta }) {
 
 // ── Main ──────────────────────────────────────────────────────
 export default function HomeClient({ stats, history = [], raidHistory = [] }) {
-  const [focused,    setFocused]    = useState(1); // Duel is default active card
+  const [focused,    setFocused]    = useState(DEFAULT_FOCUSED);
   const [activeTab,  setActiveTab]  = useState(0);
 
   const hasStats = !!stats;
@@ -388,7 +392,7 @@ export default function HomeClient({ stats, history = [], raidHistory = [] }) {
             fontWeight: 900, letterSpacing: "-0.03em",
             color: "#e8f0f3", margin: 0, lineHeight: 1.1,
           }}>
-            {hasStats ? stats.name : "DebugBattle"}
+            {hasStats ? stats.name : "DebugRoyale"}
           </h1>
           {!hasStats && (
             <p style={{ fontSize: "15px", color: "#8ba0a6", margin: "12px 0 0", lineHeight: 1.6 }}>
@@ -468,7 +472,7 @@ export default function HomeClient({ stats, history = [], raidHistory = [] }) {
         </div>
 
         <div
-          onMouseLeave={() => setFocused(1)}
+          onMouseLeave={() => setFocused(DEFAULT_FOCUSED)}
           style={{
             display: "flex", gap: "20px",
             justifyContent: "center", alignItems: "center",
@@ -692,7 +696,7 @@ export default function HomeClient({ stats, history = [], raidHistory = [] }) {
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "2px" }}>
           <span style={{ fontSize: "14px", fontWeight: 900, color: "#3ddc84", letterSpacing: "-0.02em" }}>Debug</span>
-          <span style={{ fontSize: "14px", fontWeight: 900, color: "#e8f0f3", letterSpacing: "-0.02em" }}>Battle</span>
+          <span style={{ fontSize: "14px", fontWeight: 900, color: "#e8f0f3", letterSpacing: "-0.02em" }}>Royale</span>
         </div>
         <span style={{ fontSize: "12px", color: "#4a6570" }}>Powered by Groq — Competitive Code Review Arena</span>
       </footer>

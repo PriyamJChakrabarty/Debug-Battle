@@ -8,7 +8,7 @@ import HeartbeatClient from "@/components/heartbeat";
 import GroupRaidLobbyClient from "./group-raid-lobby-client";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Group Raid - DebugBattle" };
+export const metadata = { title: "Group Raid - DebugRoyale" };
 
 function resolveDisplayName(user) {
   if (!user) return "Player";
