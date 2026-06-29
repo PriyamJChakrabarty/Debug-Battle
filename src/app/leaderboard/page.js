@@ -1,26 +1,55 @@
 import SiteNav from "@/components/site-nav";
-import { getLeaderboard, getDuelWinsLeaderboard, getGroupWinsLeaderboard, getTeamsLeaderboard } from "@/lib/db-users";
+import { getRequestAuth } from "@/lib/clerk-guard";
+import {
+  getLeaderboard,
+  getDuelWinsLeaderboard,
+  getGroupWinsLeaderboard,
+  getTeamsLeaderboard,
+  getUserTeamId,
+} from "@/lib/db-users";
 import LeaderboardClient from "./leaderboard-client";
 
 export const metadata = { title: "Leaderboard — DebugRoyale" };
 export const dynamic = "force-dynamic";
 
-async function fetchAll() {
+function prepareIndividual(allRows, myClerkId) {
+  const myIdx = myClerkId ? allRows.findIndex(r => r.clerkId === myClerkId) : -1;
+  const rows = allRows.slice(0, 10).map((r, i) => ({ ...r, rank: i + 1, isMe: r.clerkId === myClerkId }));
+  const myEntry = myIdx >= 10 ? { ...allRows[myIdx], rank: myIdx + 1, isMe: true } : null;
+  return { rows, myEntry };
+}
+
+function prepareTeams(allRows, myTeamId) {
+  const myIdx = myTeamId != null ? allRows.findIndex(t => t.id === myTeamId) : -1;
+  const rows = allRows.slice(0, 10).map((t, i) => ({ ...t, rank: i + 1, isMyTeam: t.id === myTeamId }));
+  const myEntry = myIdx >= 10 ? { ...allRows[myIdx], rank: myIdx + 1, isMyTeam: true } : null;
+  return { rows, myEntry };
+}
+
+async function fetchData(userId) {
   try {
-    const [trophies, duelWins, groupWins, teamRankings] = await Promise.all([
-      getLeaderboard(10),
-      getDuelWinsLeaderboard(10),
-      getGroupWinsLeaderboard(10),
-      getTeamsLeaderboard(50),
+    const [allTrophies, allDuelWins, allGroupWins, allTeams, myTeamId] = await Promise.all([
+      getLeaderboard(200),
+      getDuelWinsLeaderboard(200),
+      getGroupWinsLeaderboard(200),
+      getTeamsLeaderboard(200),
+      userId ? getUserTeamId(userId) : Promise.resolve(null),
     ]);
-    return { trophies, duelWins, groupWins, teamRankings };
+    return {
+      trophies:     prepareIndividual(allTrophies,  userId),
+      duelWins:     prepareIndividual(allDuelWins,   userId),
+      groupWins:    prepareIndividual(allGroupWins,  userId),
+      teamRankings: prepareTeams(allTeams, myTeamId),
+    };
   } catch {
     return null;
   }
 }
 
 export default async function LeaderboardPage() {
-  const data = await fetchAll();
+  const session = await getRequestAuth();
+  const userId  = session?.userId ?? null;
+  const data    = await fetchData(userId);
 
   return (
     <div style={{
@@ -41,23 +70,19 @@ export default async function LeaderboardPage() {
 
         {/* Header */}
         <div style={{ textAlign: "center", marginBottom: "52px" }}>
-          {/* Large trophy icon */}
           <div style={{
-            fontSize: "96px", lineHeight: 1,
-            marginBottom: "16px",
+            fontSize: "96px", lineHeight: 1, marginBottom: "16px",
             filter: "drop-shadow(0 0 32px rgba(245,197,24,0.35))",
           }}>
             🏆
           </div>
-
           <h1 style={{
             fontSize: "clamp(28px, 5vw, 44px)",
             fontWeight: 900, color: "#e8f0f3",
-            letterSpacing: "-0.03em", margin: "0 0 10px",
+            letterSpacing: "-0.03em", margin: "0 0 14px",
           }}>
             Leaderboard
           </h1>
-
           <div style={{
             display: "inline-flex", alignItems: "center", gap: "7px",
             background: "rgba(61,220,132,0.08)",
@@ -70,7 +95,6 @@ export default async function LeaderboardPage() {
           </div>
         </div>
 
-        {/* Error state */}
         {data === null && (
           <div style={{
             background: "rgba(245,90,90,0.07)",

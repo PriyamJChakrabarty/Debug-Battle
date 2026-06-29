@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, inArray, isNotNull, lt, ne, sql } from "drizzle-orm";
 import { db } from "./db";
-import { duelMatchPlayers, duelMatches, raidMatchPlayers, raidMatches, teams, users } from "./schema";
+import { duelMatchPlayers, duelMatches, raidMatchPlayers, raidMatches, teamMembers, teams, users } from "./schema";
 
 export async function upsertUser({ clerkId, email, firstName, lastName, imageUrl, username }) {
   const rows = await db
@@ -32,6 +32,7 @@ export async function getLeaderboard(limit = 100) {
   return db
     .select({
       id:        users.id,
+      clerkId:   users.clerkId,
       firstName: users.firstName,
       lastName:  users.lastName,
       username:  users.username,
@@ -149,6 +150,7 @@ export async function getDuelWinsLeaderboard(limit = 10) {
   return db
     .select({
       id:        users.id,
+      clerkId:   users.clerkId,
       firstName: users.firstName,
       lastName:  users.lastName,
       username:  users.username,
@@ -164,7 +166,7 @@ export async function getDuelWinsLeaderboard(limit = 10) {
     )
     .innerJoin(users, eq(users.clerkId, duelMatchPlayers.clerkId))
     .where(and(eq(duelMatches.status, "completed"), isNotNull(duelMatches.winnerClerkId)))
-    .groupBy(users.id, users.firstName, users.lastName, users.username)
+    .groupBy(users.id, users.clerkId, users.firstName, users.lastName, users.username)
     .orderBy(desc(sql`count(*)`))
     .limit(limit);
 }
@@ -173,6 +175,7 @@ export async function getGroupWinsLeaderboard(limit = 10) {
   return db
     .select({
       id:        users.id,
+      clerkId:   users.clerkId,
       firstName: users.firstName,
       lastName:  users.lastName,
       username:  users.username,
@@ -188,9 +191,18 @@ export async function getGroupWinsLeaderboard(limit = 10) {
     )
     .innerJoin(users, eq(users.clerkId, raidMatchPlayers.clerkId))
     .where(and(eq(raidMatches.status, "completed"), isNotNull(raidMatches.winnerTeam)))
-    .groupBy(users.id, users.firstName, users.lastName, users.username)
+    .groupBy(users.id, users.clerkId, users.firstName, users.lastName, users.username)
     .orderBy(desc(sql`count(*)`))
     .limit(limit);
+}
+
+export async function getUserTeamId(clerkId) {
+  const [row] = await db
+    .select({ teamId: teamMembers.teamId })
+    .from(teamMembers)
+    .where(eq(teamMembers.clerkId, clerkId))
+    .limit(1);
+  return row?.teamId ?? null;
 }
 
 export async function getTeamsLeaderboard(limit = 50) {

@@ -25,45 +25,52 @@ function dname(row) {
   return row.username || full || "Anonymous";
 }
 
-function PlayerRow({ row, i, valueKey, valueLabel, valueColor }) {
-  const rank = i + 1;
-  const top3 = rank <= 3;
-  const rc = top3 ? RANK_COLORS[i] : C.muted;
+function PlayerRow({ row, valueKey, valueLabel, valueColor }) {
+  const { rank, isMe } = row;
+  const top3 = rank <= 3 && !isMe;
+  const rc   = isMe ? C.green : top3 ? RANK_COLORS[rank - 1] : C.muted;
   const name = dname(row);
   const value = row[valueKey] ?? 0;
 
   return (
     <div style={{
       display: "flex", alignItems: "center", gap: "14px",
-      background: top3 ? `${rc}09` : C.card,
-      border: `1px solid ${top3 ? rc + "28" : C.border}`,
+      background: isMe
+        ? "rgba(61,220,132,0.08)"
+        : top3 ? `${rc}09` : C.card,
+      border: `1px solid ${isMe
+        ? "rgba(61,220,132,0.35)"
+        : top3 ? rc + "28" : C.border}`,
       borderRadius: "10px", padding: "12px 18px",
-      boxShadow: rank === 1 ? `0 0 28px ${rc}14` : "none",
+      boxShadow: rank === 1 && !isMe ? `0 0 28px ${rc}14` : isMe ? "0 0 20px rgba(61,220,132,0.12)" : "none",
     }}>
       <div style={{
         width: "32px", flexShrink: 0, textAlign: "center",
         fontSize: top3 ? "10px" : "12px", fontWeight: 800,
         color: rc, letterSpacing: "0.04em",
       }}>
-        {top3 ? RANK_LABELS[i] : `#${rank}`}
+        {top3 ? RANK_LABELS[rank - 1] : `#${rank}`}
       </div>
       <div style={{
         width: "30px", height: "30px", borderRadius: "50%", flexShrink: 0,
-        background: `linear-gradient(135deg, ${rc}40, ${rc}14)`,
-        border: `1.5px solid ${rc}38`,
+        background: isMe
+          ? "rgba(61,220,132,0.2)"
+          : `linear-gradient(135deg, ${rc}40, ${rc}14)`,
+        border: `1.5px solid ${isMe ? "rgba(61,220,132,0.5)" : rc + "38"}`,
         display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: "13px", fontWeight: 700, color: rc,
+        fontSize: "13px", fontWeight: 700, color: isMe ? C.green : rc,
       }}>
         {name.charAt(0).toUpperCase()}
       </div>
       <div style={{
-        flex: 1, fontSize: "13px", fontWeight: 600, color: C.text,
+        flex: 1, fontSize: "13px", fontWeight: isMe ? 700 : 600,
+        color: isMe ? C.green : C.text,
         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
       }}>
-        {name}
+        {name}{isMe && <span style={{ fontSize: "10px", color: "rgba(61,220,132,0.7)", marginLeft: "8px", fontWeight: 600 }}>You</span>}
       </div>
       <div style={{ flexShrink: 0, textAlign: "right" }}>
-        <div style={{ fontSize: "17px", fontWeight: 800, color: top3 ? rc : (valueColor || C.green), lineHeight: 1 }}>
+        <div style={{ fontSize: "17px", fontWeight: 800, color: isMe ? C.green : top3 ? rc : (valueColor || C.green), lineHeight: 1 }}>
           {value}
         </div>
         <div style={{ fontSize: "10px", color: C.muted, marginTop: "2px" }}>{valueLabel}</div>
@@ -72,22 +79,34 @@ function PlayerRow({ row, i, valueKey, valueLabel, valueColor }) {
   );
 }
 
-function Section({ icon, title, subtitle, rows, valueKey, valueLabel, valueColor }) {
+function MyRankDivider({ rank }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "10px", margin: "12px 0 8px" }}>
+      <div style={{ flex: 1, height: "1px", background: "rgba(61,220,132,0.15)" }} />
+      <span style={{ fontSize: "10px", fontWeight: 700, color: "rgba(61,220,132,0.5)", letterSpacing: "0.1em", textTransform: "uppercase", whiteSpace: "nowrap" }}>
+        Your rank · #{rank}
+      </span>
+      <div style={{ flex: 1, height: "1px", background: "rgba(61,220,132,0.15)" }} />
+    </div>
+  );
+}
+
+function Section({ icon, title, subtitle, data, valueKey, valueLabel, valueColor }) {
+  const { rows, myEntry } = data;
+
   return (
     <div style={{ marginBottom: "52px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "18px" }}>
         <span style={{ fontSize: "22px" }}>{icon}</span>
         <div>
-          <div style={{
-            fontSize: "11px", fontWeight: 800, color: C.sub,
-            letterSpacing: "0.1em", textTransform: "uppercase",
-          }}>
+          <div style={{ fontSize: "11px", fontWeight: 800, color: C.sub, letterSpacing: "0.1em", textTransform: "uppercase" }}>
             {title}
           </div>
           <div style={{ fontSize: "12px", color: C.muted, marginTop: "2px" }}>{subtitle}</div>
         </div>
       </div>
-      {rows.length === 0 ? (
+
+      {rows.length === 0 && !myEntry ? (
         <div style={{
           padding: "28px", textAlign: "center", color: C.muted, fontSize: "13px",
           background: "rgba(14,25,31,0.6)", borderRadius: "10px", border: `1px solid ${C.border}`,
@@ -95,52 +114,67 @@ function Section({ icon, title, subtitle, rows, valueKey, valueLabel, valueColor
           No data yet — be the first on this board.
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-          {rows.map((row, i) => (
-            <PlayerRow key={row.id} row={row} i={i} valueKey={valueKey} valueLabel={valueLabel} valueColor={valueColor} />
-          ))}
-        </div>
+        <>
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            {rows.map((row) => (
+              <PlayerRow key={row.id} row={row} valueKey={valueKey} valueLabel={valueLabel} valueColor={valueColor} />
+            ))}
+          </div>
+          {myEntry && (
+            <>
+              <MyRankDivider rank={myEntry.rank} />
+              <PlayerRow row={myEntry} valueKey={valueKey} valueLabel={valueLabel} valueColor={valueColor} />
+            </>
+          )}
+        </>
       )}
     </div>
   );
 }
 
-function TeamRow({ team, i }) {
-  const rank = i + 1;
-  const top3 = rank <= 3;
-  const rc = top3 ? RANK_COLORS[i] : C.muted;
+function TeamRow({ team, valueColor }) {
+  const { rank, isMyTeam } = team;
+  const top3 = rank <= 3 && !isMyTeam;
+  const rc   = isMyTeam ? C.green : top3 ? RANK_COLORS[rank - 1] : C.muted;
   const total = (team.wins || 0) + (team.losses || 0);
-  const wr = total > 0 ? Math.round((team.wins / total) * 100) : 0;
+  const wr  = total > 0 ? Math.round((team.wins / total) * 100) : 0;
 
   return (
     <div style={{
       display: "flex", alignItems: "center", gap: "14px",
-      background: top3 ? `${rc}09` : C.card,
-      border: `1px solid ${top3 ? rc + "28" : C.border}`,
+      background: isMyTeam
+        ? "rgba(61,220,132,0.08)"
+        : top3 ? `${rc}09` : C.card,
+      border: `1px solid ${isMyTeam
+        ? "rgba(61,220,132,0.35)"
+        : top3 ? rc + "28" : C.border}`,
       borderRadius: "10px", padding: "14px 18px",
-      boxShadow: rank === 1 ? `0 0 28px ${rc}14` : "none",
+      boxShadow: rank === 1 && !isMyTeam ? `0 0 28px ${rc}14` : isMyTeam ? "0 0 20px rgba(61,220,132,0.12)" : "none",
     }}>
       <div style={{
         width: "32px", flexShrink: 0, textAlign: "center",
         fontSize: top3 ? "10px" : "12px", fontWeight: 800,
         color: rc, letterSpacing: "0.04em",
       }}>
-        {top3 ? RANK_LABELS[i] : `#${rank}`}
+        {top3 ? RANK_LABELS[rank - 1] : `#${rank}`}
       </div>
       <div style={{ fontSize: "22px", flexShrink: 0 }}>{team.emoji}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
-          fontSize: "13px", fontWeight: 700, color: C.text,
+          fontSize: "13px", fontWeight: isMyTeam ? 700 : 600,
+          color: isMyTeam ? C.green : C.text,
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          display: "flex", alignItems: "center", gap: "8px",
         }}>
           {team.name}
+          {isMyTeam && <span style={{ fontSize: "10px", color: "rgba(61,220,132,0.7)", fontWeight: 600 }}>You</span>}
         </div>
         <div style={{ fontSize: "11px", color: C.muted, marginTop: "2px" }}>
           {team.wins}W – {team.losses}L · {wr}% win rate
         </div>
       </div>
       <div style={{ flexShrink: 0, textAlign: "right" }}>
-        <div style={{ fontSize: "17px", fontWeight: 800, color: top3 ? rc : C.amber, lineHeight: 1 }}>
+        <div style={{ fontSize: "17px", fontWeight: 800, color: isMyTeam ? C.green : top3 ? rc : (valueColor || C.amber), lineHeight: 1 }}>
           {team.wins}
         </div>
         <div style={{ fontSize: "10px", color: C.muted, marginTop: "2px" }}>wins</div>
@@ -151,6 +185,7 @@ function TeamRow({ team, i }) {
 
 export default function LeaderboardClient({ trophies, duelWins, groupWins, teamRankings }) {
   const [tab, setTab] = useState("individual");
+  const { rows: teamRows, myEntry: myTeamEntry } = teamRankings;
 
   return (
     <div>
@@ -183,30 +218,16 @@ export default function LeaderboardClient({ trophies, duelWins, groupWins, teamR
       {tab === "individual" ? (
         <div>
           <Section
-            icon="🏆"
-            title="Trophies"
-            subtitle="Best score achieved in a single match"
-            rows={trophies}
-            valueKey="bestScore"
-            valueLabel="pts"
+            icon="🏆" title="Trophies" subtitle="Best score achieved in a single match"
+            data={trophies} valueKey="bestScore" valueLabel="pts"
           />
           <Section
-            icon="⚔️"
-            title="Wins"
-            subtitle="1v1 duel victories"
-            rows={duelWins}
-            valueKey="count"
-            valueLabel="wins"
-            valueColor={C.cyan}
+            icon="⚔️" title="Wins" subtitle="1v1 duel victories"
+            data={duelWins} valueKey="count" valueLabel="wins" valueColor={C.cyan}
           />
           <Section
-            icon="🛡️"
-            title="Group Wins"
-            subtitle="Group raid victories"
-            rows={groupWins}
-            valueKey="count"
-            valueLabel="wins"
-            valueColor={C.amber}
+            icon="🛡️" title="Group Wins" subtitle="Group raid victories"
+            data={groupWins} valueKey="count" valueLabel="wins" valueColor={C.amber}
           />
         </div>
       ) : (
@@ -214,10 +235,7 @@ export default function LeaderboardClient({ trophies, duelWins, groupWins, teamR
           <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "18px" }}>
             <span style={{ fontSize: "22px" }}>🏅</span>
             <div>
-              <div style={{
-                fontSize: "11px", fontWeight: 800, color: C.sub,
-                letterSpacing: "0.1em", textTransform: "uppercase",
-              }}>
+              <div style={{ fontSize: "11px", fontWeight: 800, color: C.sub, letterSpacing: "0.1em", textTransform: "uppercase" }}>
                 Team Rankings
               </div>
               <div style={{ fontSize: "12px", color: C.muted, marginTop: "2px" }}>
@@ -225,7 +243,8 @@ export default function LeaderboardClient({ trophies, duelWins, groupWins, teamR
               </div>
             </div>
           </div>
-          {teamRankings.length === 0 ? (
+
+          {teamRows.length === 0 && !myTeamEntry ? (
             <div style={{
               padding: "48px 24px", textAlign: "center", color: C.muted, fontSize: "13px",
               background: "rgba(14,25,31,0.6)", borderRadius: "10px", border: `1px solid ${C.border}`,
@@ -233,9 +252,17 @@ export default function LeaderboardClient({ trophies, duelWins, groupWins, teamR
               No teams have competed yet.
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              {teamRankings.map((team, i) => <TeamRow key={team.id} team={team} i={i} />)}
-            </div>
+            <>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {teamRows.map((team) => <TeamRow key={team.id} team={team} />)}
+              </div>
+              {myTeamEntry && (
+                <>
+                  <MyRankDivider rank={myTeamEntry.rank} />
+                  <TeamRow team={myTeamEntry} />
+                </>
+              )}
+            </>
           )}
         </div>
       )}
